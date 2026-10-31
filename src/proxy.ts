@@ -3,7 +3,8 @@ import { decrypt, SESSION_COOKIE } from "@/lib/session";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 // Reachable both signed in and signed out (no redirect either way)
-const OPEN_PATHS = ["/sw.js", "/manifest.webmanifest", "/api/cron", "/api/webhooks"];
+// Public website (/site), customer portal (/portal) and public APIs (brochures, enquiries, portal files).
+const OPEN_PATHS = ["/sw.js", "/manifest.webmanifest", "/api/cron", "/api/webhooks", "/api/public", "/site", "/portal"];
 
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

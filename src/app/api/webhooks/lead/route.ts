@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
-import { addMinutes } from "date-fns";
 import { db } from "@/lib/db";
-import { logActivity } from "@/lib/activity";
-import { notifyUser } from "@/lib/notify";
-import { LEAD_SOURCES, OPEN_LEAD_STATUSES, PROPERTY_TYPES } from "@/lib/constants";
-import { normalizePhone } from "@/lib/utils";
+import { LEAD_SOURCES } from "@/lib/constants";
+import { intakeLead, matchOption, parseBudget } from "@/lib/lead-intake";
 
 /**
  * Lead capture webhook for website forms, landing pages, Zapier, portals etc.
@@ -44,12 +41,6 @@ async function readBody(req: Request): Promise<Record<string, string>> {
   }
 }
 
-function matchOption(list: { value: string; label: string }[], raw: string | undefined) {
-  if (!raw) return null;
-  const v = raw.trim().toLowerCase();
-  return list.find((o) => o.value.toLowerCase() === v || o.label.toLowerCase() === v)?.value ?? null;
-}
-
 export async function POST(req: Request) {
   const key = new URL(req.url).searchParams.get("key") ?? req.headers.get("x-api-key") ?? "";
   const settings = await db.settings.findUnique({ where: { id: 1 } });
@@ -58,75 +49,16 @@ export async function POST(req: Request) {
   }
 
   const b = await readBody(req);
-  const name = (b.name ?? b.full_name ?? b.fullName ?? "").trim().slice(0, 120);
-  const rawPhone = (b.phone ?? b.mobile ?? b.phone_number ?? "").trim();
-  const digits = rawPhone.replace(/\D/g, "");
-  if (!name || digits.length < 7) {
-    return json({ ok: false, error: "Fields 'name' and a valid 'phone' are required" }, 422);
-  }
-
-  const email = (b.email ?? "").trim() || null;
-  const message = (b.message ?? b.notes ?? "").trim().slice(0, 2000) || null;
-  const location = (b.location ?? b.city ?? "").trim() || null;
-  const budget = Number(String(b.budget ?? "").replace(/[^\d.]/g, ""));
-  const source = matchOption(LEAD_SOURCES, b.source) ?? "WEBSITE";
-  const propertyType = matchOption(PROPERTY_TYPES, b.propertyType ?? b.property_type);
-
-  // Dedupe by phone (match on last 10 digits)
-  const last10 = digits.slice(-10);
-  const existing = await db.lead.findFirst({ where: { phone: { contains: last10, mode: "insensitive" } }, orderBy: { createdAt: "desc" } });
-  if (existing) {
-    await logActivity({
-      type: "NOTE",
-      content: `Repeat enquiry received via ${source.replace(/_/g, " ").toLowerCase()}${message ? `: ${message}` : ""}`,
-      leadId: existing.id,
-    });
-    await db.lead.update({ where: { id: existing.id }, data: { updatedAt: new Date(), ...(existing.status === "LOST" ? { status: "NEW" } : {}) } });
-    await notifyUser(existing.assignedToId, { title: `Repeat enquiry: ${existing.name}`, body: message ? message.slice(0, 120) : `New enquiry via ${source.replace(/_/g, " ").toLowerCase()}`, url: `/leads/${existing.id}`, tag: `lead-${existing.id}` });
-    return json({ ok: true, leadId: existing.id, duplicate: true });
-  }
-
-  // Round-robin: active agent with the fewest open leads
-  const agents = await db.user.findMany({
-    where: { active: true, role: "AGENT" },
-    select: { id: true, name: true, _count: { select: { assignedLeads: { where: { status: { in: OPEN_LEAD_STATUSES } } } } } },
+  const res = await intakeLead({
+    name: b.name ?? b.full_name ?? b.fullName ?? "",
+    phone: b.phone ?? b.mobile ?? b.phone_number ?? "",
+    email: b.email ?? null,
+    source: matchOption(LEAD_SOURCES, b.source) ?? "WEBSITE",
+    message: b.message ?? b.notes ?? null,
+    location: b.location ?? b.city ?? null,
+    budget: parseBudget(b.budget),
+    propertyType: b.propertyType ?? b.property_type ?? null,
   });
-  agents.sort((a, b2) => a._count.assignedLeads - b2._count.assignedLeads);
-  const assignee = agents[0] ?? null;
-
-  const lead = await db.lead.create({
-    data: {
-      name,
-      phone: digits.length > 10 ? `+${normalizePhone(rawPhone, settings.defaultCountryCode)}` : digits,
-      email,
-      source,
-      status: "NEW",
-      priority: "WARM",
-      propertyType,
-      preferredLocation: location,
-      budgetMax: Number.isFinite(budget) && budget > 0 ? budget : null,
-      notes: message,
-      assignedToId: assignee?.id ?? null,
-    },
-  });
-
-  await logActivity({ type: "CREATED", content: `Lead captured automatically from ${source.replace(/_/g, " ").toLowerCase()}`, leadId: lead.id });
-  if (assignee) await logActivity({ type: "ASSIGNED", content: `Auto-assigned to ${assignee.name}`, leadId: lead.id });
-
-  await db.followUp.create({
-    data: {
-      title: "Call new lead",
-      type: "CALL",
-      dueAt: addMinutes(new Date(), 15),
-      priority: "HIGH",
-      notes: "New enquiry. Respond quickly - leads contacted within an hour convert far better.",
-      leadId: lead.id,
-      assignedToId: assignee?.id ?? null,
-    },
-  });
-
-  if (assignee) {
-    await notifyUser(assignee.id, { title: `New lead assigned: ${lead.name}`, body: `${lead.phone} - from ${source.replace(/_/g, " ").toLowerCase()}. Call within 15 minutes.`, url: `/leads/${lead.id}`, tag: `lead-${lead.id}` });
-  }
-    return json({ ok: true, leadId: lead.id }, 201);
+  if (!res.ok) return json({ ok: false, error: "Fields 'name' and a valid 'phone' are required" }, 422);
+  return json({ ok: true, leadId: res.leadId, ...(res.duplicate ? { duplicate: true } : {}) }, res.duplicate ? 200 : 201);
 }

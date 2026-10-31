@@ -158,3 +158,69 @@ export function labelOf(list: Option[], value: string | null | undefined) {
 export function optionOf(list: Option[], value: string | null | undefined) {
   return list.find((o) => o.value === value);
 }
+
+export const BOOKING_STATUSES = opts([
+  { value: "ACTIVE", label: "Active", color: "bg-sky-50 text-sky-700 ring-sky-600/20", dot: "bg-sky-500" },
+  { value: "COMPLETED", label: "Completed", color: "bg-emerald-50 text-emerald-700 ring-emerald-600/20", dot: "bg-emerald-500" },
+  { value: "CANCELLED", label: "Cancelled", color: "bg-rose-50 text-rose-700 ring-rose-600/20", dot: "bg-rose-500" },
+]);
+
+export const INSTALLMENT_STATUSES = opts([
+  { value: "PENDING", label: "Pending", color: "bg-amber-50 text-amber-700 ring-amber-600/20", dot: "bg-amber-500" },
+  { value: "PARTIAL", label: "Partially paid", color: "bg-sky-50 text-sky-700 ring-sky-600/20", dot: "bg-sky-500" },
+  { value: "PAID", label: "Paid", color: "bg-emerald-50 text-emerald-700 ring-emerald-600/20", dot: "bg-emerald-500" },
+  { value: "WAIVED", label: "Waived", color: "bg-slate-100 text-slate-600 ring-slate-500/20", dot: "bg-slate-400" },
+  { value: "OVERDUE", label: "Overdue", color: "bg-rose-50 text-rose-700 ring-rose-600/20", dot: "bg-rose-500" },
+]);
+
+export const PAYMENT_METHODS = opts([
+  { value: "UPI", label: "UPI" },
+  { value: "NEFT", label: "NEFT" },
+  { value: "RTGS", label: "RTGS" },
+  { value: "IMPS", label: "IMPS" },
+  { value: "CHEQUE", label: "Cheque" },
+  { value: "DD", label: "Demand Draft" },
+  { value: "CASH", label: "Cash" },
+  { value: "CARD", label: "Card" },
+  { value: "HOME_LOAN", label: "Home Loan Disbursement" },
+  { value: "OTHER", label: "Other" },
+]);
+
+export const CALL_STATUSES = opts([
+  { value: "INITIATED", label: "Connecting", color: "bg-slate-50 text-slate-600 ring-slate-500/20" },
+  { value: "RINGING", label: "Ringing", color: "bg-sky-50 text-sky-700 ring-sky-600/20" },
+  { value: "ANSWERED", label: "Answered", color: "bg-emerald-50 text-emerald-700 ring-emerald-600/20" },
+  { value: "MISSED", label: "Missed", color: "bg-rose-50 text-rose-700 ring-rose-600/20" },
+  { value: "NO_ANSWER", label: "No answer", color: "bg-amber-50 text-amber-700 ring-amber-600/20" },
+  { value: "BUSY", label: "Busy", color: "bg-orange-50 text-orange-700 ring-orange-600/20" },
+  { value: "FAILED", label: "Failed", color: "bg-rose-50 text-rose-700 ring-rose-600/20" },
+]);
+
+export const CALL_OUTCOMES = ["Interested", "Not interested", "Call back later", "Wrong number", "Site visit fixed", "Negotiating", "Switched off", "Not reachable"];
+
+export const DOCUMENT_CATEGORIES = opts([
+  { value: "KYC_PAN", label: "PAN Card" },
+  { value: "KYC_AADHAAR", label: "Aadhaar Card" },
+  { value: "KYC_PHOTO", label: "Photograph" },
+  { value: "KYC_OTHER", label: "Other KYC" },
+  { value: "BOOKING_FORM", label: "Booking Form" },
+  { value: "ALLOTMENT_LETTER", label: "Allotment Letter" },
+  { value: "AGREEMENT", label: "Agreement for Sale" },
+  { value: "SALE_DEED", label: "Sale Deed" },
+  { value: "RECEIPT", label: "Payment Receipt" },
+  { value: "LOAN", label: "Loan Documents" },
+  { value: "NOC", label: "NOC" },
+  { value: "OTHER", label: "Other" },
+]);
+
+export const INTEGRATION_SOURCES = opts([
+  { value: "FACEBOOK", label: "Facebook Lead Ads" },
+  { value: "INSTAGRAM", label: "Instagram Lead Ads" },
+  { value: "99ACRES", label: "99acres" },
+  { value: "MAGICBRICKS", label: "MagicBricks" },
+  { value: "HOUSING", label: "Housing.com" },
+  { value: "WEBSITE", label: "Website / Forms" },
+  { value: "PUBLIC_SITE", label: "Public listing site" },
+  { value: "EXOTEL", label: "Exotel" },
+  { value: "KNOWLARITY", label: "Knowlarity" },
+]);

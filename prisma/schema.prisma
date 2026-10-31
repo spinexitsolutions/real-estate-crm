@@ -36,6 +36,12 @@ model User {
   messages        WhatsAppMessage[]
   pushSubscriptions PushSubscription[]
   resetTokens     PasswordResetToken[]
+  calls           CallLog[]
+  attendance      Attendance[]
+  siteCheckIns    SiteVisitCheckIn[]
+  documents       Document[]          @relation("DocumentUploader")
+  bookingsCreated Booking[]           @relation("BookingCreator")
+  paymentsRecorded PaymentInstallment[] @relation("PaymentRecorder")
 }
 
 model Lead {
@@ -71,6 +77,11 @@ model Lead {
   deals       Deal[]
   interests   LeadProperty[]
   messages    WhatsAppMessage[]
+  bookings    Booking[]
+  calls       CallLog[]
+  documents   Document[]
+  checkIns    SiteVisitCheckIn[]
+  portalAccess PortalAccess?
 
   @@index([status])
   @@index([assignedToId])
@@ -99,6 +110,9 @@ model Property {
   ownerName    String?
   ownerPhone   String?
   featured     Boolean  @default(false)
+  published    Boolean  @default(false) // shown on the public website
+  latitude     Float?
+  longitude    Float?
   agentId      String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -108,6 +122,9 @@ model Property {
   deals       Deal[]
   followUps   FollowUp[]
   activities  Activity[]
+  bookings    Booking[]
+  documents   Document[]
+  checkIns    SiteVisitCheckIn[]
 
   @@index([status])
   @@index([city])
@@ -144,6 +161,7 @@ model FollowUp {
   lead       Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   assignedTo User?     @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  checkIns   SiteVisitCheckIn[]
 
   @@index([dueAt])
   @@index([status])
@@ -168,6 +186,8 @@ model Deal {
   property   Property?  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   agent      User?      @relation(fields: [agentId], references: [id], onDelete: SetNull)
   activities Activity[]
+  booking    Booking?
+  documents  Document[]
 
   @@index([stage])
 }
@@ -243,6 +263,38 @@ model Settings {
   emailDigestEnabled Boolean  @default(true)
   pushEnabled        Boolean  @default(true)
   lastDigestDate     String?  // yyyy-MM-dd of last daily digest run
+  // Branding
+  logoUrl            String?
+  brandColor         String   @default("#4f46e5")
+  reraNumber         String?
+  // Public website
+  websiteEnabled     Boolean  @default(false)
+  websiteTagline     String?
+  websiteAbout       String?
+  // Portal integrations (Facebook / Instagram Lead Ads)
+  fbVerifyToken      String?
+  fbAppSecret        String?
+  fbPageAccessToken  String?
+  // Telephony (click-to-call)
+  telephonyProvider  String?  // EXOTEL | KNOWLARITY
+  exotelSid          String?
+  exotelApiKey       String?
+  exotelApiToken     String?
+  exotelSubdomain    String   @default("api.exotel.com")
+  exotelCallerId     String?
+  knowlarityApiKey   String?
+  knowlarityAuthToken String?
+  knowlaritySrNumber String?
+  knowlarityCallerId String?
+  telephonyWebhookKey String?
+  // Attendance
+  officeLatitude     Float?
+  officeLongitude    Float?
+  officeRadiusM      Int      @default(300)
+  // Payments
+  waPaymentTemplate  String?  // approved Meta template for customer payment reminders
+  receiptPrefix      String   @default("RCPT")
+  nextReceiptNo      Int      @default(1001)
   updatedAt          DateTime @updatedAt
 }
 
@@ -276,4 +328,173 @@ model LoginAttempt {
   createdAt DateTime @default(now())
 
   @@index([key, createdAt])
+}
+
+model Booking {
+  id            String    @id @default(cuid())
+  bookingNo     String    @unique
+  dealId        String?   @unique
+  leadId        String
+  propertyId    String?
+  unitNumber    String?
+  bookingDate   DateTime  @default(now())
+  agreementDate DateTime?
+  totalAmount   Float
+  status        String    @default("ACTIVE") // ACTIVE | COMPLETED | CANCELLED
+  notes         String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  deal         Deal?                @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  lead         Lead                 @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  property     Property?            @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  createdBy    User?                @relation("BookingCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  installments PaymentInstallment[]
+  documents    Document[]
+
+  @@index([leadId])
+}
+
+model PaymentInstallment {
+  id             String    @id @default(cuid())
+  bookingId      String
+  label          String    // Token, Agreement (10%), Slab 1 ...
+  dueDate        DateTime
+  amount         Float
+  paidAmount     Float     @default(0)
+  status         String    @default("PENDING") // PENDING | PARTIAL | PAID | WAIVED
+  paidAt         DateTime?
+  method         String?   // CASH | CHEQUE | UPI | NEFT | RTGS | CARD | HOME_LOAN | OTHER
+  reference      String?   // cheque no / UTR / transaction id
+  receiptNo      String?   @unique
+  notes          String?
+  reminderSentAt DateTime?
+  recordedById   String?
+  sortOrder      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  recordedBy User?   @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([dueDate])
+  @@index([status])
+}
+
+model CallLog {
+  id             String    @id @default(cuid())
+  direction      String    @default("OUT") // OUT | IN
+  status         String    @default("ANSWERED") // INITIATED | RINGING | ANSWERED | MISSED | BUSY | NO_ANSWER | FAILED
+  provider       String    @default("MANUAL") // MANUAL | EXOTEL | KNOWLARITY
+  providerCallId String?   @unique
+  fromNumber     String?
+  toNumber       String?
+  durationSec    Int       @default(0)
+  recordingUrl   String?
+  outcome        String?
+  notes          String?
+  leadId         String?
+  userId         String?
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([startedAt])
+  @@index([leadId])
+}
+
+model Attendance {
+  id               String    @id @default(cuid())
+  userId           String
+  date             String    // yyyy-MM-dd in app timezone
+  checkInAt        DateTime
+  checkInLat       Float?
+  checkInLng       Float?
+  checkInAccuracy  Float?
+  checkInDistanceM Float?
+  checkOutAt       DateTime?
+  checkOutLat      Float?
+  checkOutLng      Float?
+  checkOutDistanceM Float?
+  notes            String?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+model SiteVisitCheckIn {
+  id          String   @id @default(cuid())
+  leadId      String
+  propertyId  String?
+  followUpId  String?
+  userId      String?
+  latitude    Float
+  longitude   Float
+  accuracy    Float?
+  distanceM   Float?   // distance from the property's saved location
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  followUp FollowUp? @relation(fields: [followUpId], references: [id], onDelete: SetNull)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+model Document {
+  id                String   @id @default(cuid())
+  name              String
+  category          String   @default("OTHER") // KYC_PAN | KYC_AADHAAR | KYC_PHOTO | AGREEMENT | SALE_DEED | ALLOTMENT_LETTER | RECEIPT | LOAN | NOC | OTHER
+  storagePath       String   // path inside the private documents bucket (or local path in dev)
+  mimeType          String
+  size              Int
+  visibleToCustomer Boolean  @default(false)
+  leadId            String?
+  dealId            String?
+  bookingId         String?
+  propertyId        String?
+  uploadedById      String?
+  createdAt         DateTime @default(now())
+
+  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  deal       Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  booking    Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  uploadedBy User?     @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+}
+
+model PortalAccess {
+  id           String    @id @default(cuid())
+  leadId       String    @unique
+  token        String    @unique // random, shared with the customer as a private link
+  pin          String?   // optional 4-6 digit PIN (bcrypt hash)
+  lastViewedAt DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model IntegrationLog {
+  id        String   @id @default(cuid())
+  source    String   // FACEBOOK | INSTAGRAM | 99ACRES | MAGICBRICKS | HOUSING | WEBSITE | EXOTEL | KNOWLARITY
+  status    String   // OK | DUPLICATE | ERROR | IGNORED
+  message   String?
+  payload   String?
+  leadId    String?
+  createdAt DateTime @default(now())
+
+  @@index([source, createdAt])
 }
