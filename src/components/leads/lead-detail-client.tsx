@@ -245,14 +245,14 @@ export function NoteComposer({ leadId }: { leadId: string }) {
   const [pending, start] = useTransition();
   return (
     <div className="rounded-xl border border-slate-200 bg-white focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-500/10">
-      <div className="flex gap-1 border-b border-slate-100 px-2 pt-2">
+      <div className="flex gap-1 overflow-x-auto border-b border-slate-100 px-2 pt-2">
         {NOTE_TYPES.map((t) => (
           <button
             key={t.value}
             type="button"
             onClick={() => setType(t.value)}
             className={cn(
-              "-mb-px flex items-center gap-1.5 border-b-2 px-3 pb-2 pt-1 text-[13px] font-medium transition",
+              "-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 pb-2 pt-1 text-[13px] font-medium transition",
               type === t.value ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800",
             )}
           >

@@ -16,7 +16,6 @@ import {
   RotateCcw,
   SquarePen,
   Trash2,
-  Undo2,
 } from "lucide-react";
 import {
   addInstallment,
@@ -25,7 +24,6 @@ import {
   moveInstallment,
   recordPayment,
   setInstallmentWaived,
-  undoPayment,
   updateInstallment,
 } from "@/actions/bookings";
 import { Button } from "@/components/ui/button";
@@ -47,9 +45,10 @@ export type InstallmentRow = {
   paidAmount: number;
   status: string;
   paidAt: string | null;
-  method: string | null;
-  reference: string | null;
-  receiptNo: string | null;
+  /** Active (non-cancelled) receipts issued against this installment */
+  receipts: { id: string; receiptNo: string; amount: number; paidAt: string; method: string; reference: string | null }[];
+  /** True when any receipt (including cancelled) exists - such installments cannot be deleted */
+  hasReceipts: boolean;
   reminderSentAt: string | null;
 };
 
@@ -71,7 +70,7 @@ export function InstallmentTable({ rows, ctx }: { rows: InstallmentRow[]; ctx: C
   const [paying, setPaying] = useState<InstallmentRow | null>(null);
   const [editing, setEditing] = useState<InstallmentRow | null>(null);
   const [adding, setAdding] = useState(false);
-  const [confirm, setConfirm] = useState<{ kind: "delete" | "undo"; row: InstallmentRow } | null>(null);
+  const [confirm, setConfirm] = useState<{ kind: "delete"; row: InstallmentRow } | null>(null);
   const now = new Date();
 
   const run = (fn: () => Promise<{ error?: string }>, ok: string) =>
@@ -112,14 +111,21 @@ export function InstallmentTable({ rows, ctx }: { rows: InstallmentRow[]; ctx: C
               return (
                 <tr key={r.id} className={cn("hover:bg-slate-50/70", st === "OVERDUE" && "bg-rose-50/30")}>
                   <td className="table-td text-xs text-slate-400">{idx + 1}</td>
-                  <td className="table-td">
+                  <td className="table-td min-w-64 whitespace-normal">
                     <p className="font-medium text-slate-800">{r.label}</p>
-                    {r.receiptNo && (
-                      <p className="text-xs text-slate-500">
-                        {r.receiptNo} - {labelOf(PAYMENT_METHODS, r.method ?? "OTHER")}
-                        {r.reference ? ` ${r.reference}` : ""} - {formatDate(r.paidAt)}
-                      </p>
-                    )}
+                    {r.receipts.map((rc) => (
+                      <a
+                        key={rc.id}
+                        href={`/api/receipts/${rc.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block text-xs text-slate-500 hover:text-brand-700"
+                        title="Open receipt PDF"
+                      >
+                        <span className="font-medium text-slate-600">{rc.receiptNo}</span> - {formatCurrency(rc.amount)} - {labelOf(PAYMENT_METHODS, rc.method)}
+                        {rc.reference ? ` ${rc.reference}` : ""} - {formatDate(rc.paidAt)}
+                      </a>
+                    ))}
                   </td>
                   <td className={cn("table-td", st === "OVERDUE" ? "font-medium text-rose-600" : "")}>{formatDate(r.dueDate)}</td>
                   <td className="table-td text-right font-medium text-slate-900">{formatCurrency(r.amount)}</td>
@@ -137,8 +143,14 @@ export function InstallmentTable({ rows, ctx }: { rows: InstallmentRow[]; ctx: C
                           <IndianRupee /> Record payment
                         </Button>
                       )}
-                      {r.receiptNo && (
-                        <a href={`/api/receipts/${r.id}`} target="_blank" rel="noreferrer" title="Receipt PDF" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                      {r.receipts.length > 0 && (
+                        <a
+                          href={`/api/receipts/${r.receipts[r.receipts.length - 1].id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Latest receipt PDF"
+                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        >
                           <FileDown className="size-4" />
                         </a>
                       )}
@@ -203,19 +215,7 @@ export function InstallmentTable({ rows, ctx }: { rows: InstallmentRow[]; ctx: C
                                 {r.status === "WAIVED" ? "Reinstate" : "Waive balance"}
                               </DropdownItem>
                             )}
-                            {ctx.canManage && r.paidAmount > 0 && (
-                              <DropdownItem
-                                icon={Undo2}
-                                danger
-                                onClick={() => {
-                                  close();
-                                  setConfirm({ kind: "undo", row: r });
-                                }}
-                              >
-                                Undo payment
-                              </DropdownItem>
-                            )}
-                            {r.paidAmount === 0 && (
+                            {!r.hasReceipts && (
                               <DropdownItem
                                 icon={Trash2}
                                 danger
@@ -251,19 +251,15 @@ export function InstallmentTable({ rows, ctx }: { rows: InstallmentRow[]; ctx: C
       <ConfirmDialog
         open={!!confirm}
         onClose={() => setConfirm(null)}
-        title={confirm?.kind === "undo" ? "Undo this payment?" : "Delete this installment?"}
-        description={
-          confirm?.kind === "undo"
-            ? `The payment of ${formatCurrency(confirm.row.paidAmount)} will be reversed and receipt ${confirm.row.receiptNo ?? ""} cancelled.`
-            : "The installment will be removed from the schedule."
-        }
-        confirmLabel={confirm?.kind === "undo" ? "Undo payment" : "Delete"}
+        title="Delete this installment?"
+        description="The installment will be removed from the schedule."
+        confirmLabel="Delete"
         action={async () => {
-          const r = confirm!.kind === "undo" ? await undoPayment(confirm!.row.id) : await deleteInstallment(confirm!.row.id);
+          const r = await deleteInstallment(confirm!.row.id);
           if (!r.error) router.refresh();
           return r;
         }}
-        successMessage={confirm?.kind === "undo" ? "Payment reversed" : "Installment deleted"}
+        successMessage="Installment deleted"
       />
     </>
   );
@@ -300,7 +296,7 @@ function RecordPaymentModal({ row, onClose }: { row: InstallmentRow; onClose: ()
                 const r = await recordPayment(row.id, fd);
                 if (r.error) return void setError(r.error);
                 toast.success(`Payment recorded. Receipt ${r.data?.receiptNo}`, {
-                  action: { label: "Open receipt", onClick: () => window.open(`/api/receipts/${row.id}`, "_blank") },
+                  action: { label: "Open receipt", onClick: () => window.open(`/api/receipts/${r.data?.paymentId}`, "_blank") },
                 });
                 onClose();
                 router.refresh();
@@ -324,7 +320,11 @@ function RecordPaymentModal({ row, onClose }: { row: InstallmentRow; onClose: ()
           <Field label="Mode">
             <Select name="method" value={method} onChange={(e) => setMethod(e.target.value)} options={PAYMENT_METHODS} />
           </Field>
-          <Field label={method === "CHEQUE" ? "Cheque number / bank" : method === "CASH" ? "Reference (optional)" : "Transaction ID / UTR"} className="sm:col-span-2">
+          <Field
+            label={method === "CHEQUE" || method === "DD" ? "Cheque / DD number and bank" : ["CASH", "CARD", "HOME_LOAN", "OTHER"].includes(method) ? "Reference (optional)" : "Transaction ID / UTR"}
+            required={["CHEQUE", "DD", "UPI", "NEFT", "RTGS", "IMPS"].includes(method)}
+            className="sm:col-span-2"
+          >
             <Input name="reference" placeholder={method === "CHEQUE" ? "e.g. 004512, HDFC Bank" : "e.g. 4231 8890 1123"} />
           </Field>
           <Field label="Notes" className="sm:col-span-2">

@@ -568,29 +568,72 @@ async function main() {
         if (n === 1 && isLast && k > 0) continue;
         const partial = n === 2 && isLast && k > 0;
         const paid = partial ? Math.round(inst.amount * 0.4) : inst.amount;
-        const paidAt = new Date(inst.dueDate.getTime() + int(0, 4) * 86400000);
+        const baseDate = new Date(inst.dueDate.getTime() + int(0, 4) * 86400000);
+        const clamp = (d: Date) => (d.getTime() > now ? new Date(now - 3600000) : d);
+        const refFor = (m: string) => (m === "CHEQUE" ? `00${int(1000, 9999)} HDFC Bank` : m === "UPI" ? `UPI${int(100000000, 999999999)}` : `UTR${int(1000000000, 9999999999)}`);
         const method = k === 0 ? "UPI" : methods[(k + n) % methods.length];
-        const no = `RCPT-${receiptNo++}`;
+
+        // Each amount received is its own receipt. Demo cases:
+        //  - booking 1, 2nd installment: paid in two parts (two receipts)
+        //  - booking 2, 2nd installment: first cheque bounced (cancelled receipt), then paid by NEFT
+        const parts: { amount: number; method: string; at: Date; cancel?: string }[] =
+          n === 0 && k === 1
+            ? [
+                { amount: Math.round(paid * 0.6), method: "NEFT", at: baseDate },
+                { amount: paid - Math.round(paid * 0.6), method: "UPI", at: new Date(baseDate.getTime() + 6 * 86400000) },
+              ]
+            : n === 1 && k === 1
+              ? [
+                  { amount: paid, method: "CHEQUE", at: baseDate, cancel: "Cheque bounced - insufficient funds" },
+                  { amount: paid, method: "NEFT", at: new Date(baseDate.getTime() + 5 * 86400000) },
+                ]
+              : [{ amount: paid, method, at: baseDate }];
+
+        let received = 0;
+        let lastAt: Date | null = null;
+        for (const part of parts) {
+          const at = clamp(part.at);
+          const no = `RCPT-${receiptNo++}`;
+          await db.payment.create({
+            data: {
+              receiptNo: no,
+              bookingId: booking.id,
+              installmentId: inst.id,
+              amount: part.amount,
+              paidAt: at,
+              method: part.method,
+              reference: refFor(part.method),
+              recordedById: d.agentId,
+              ...(part.cancel ? { status: "CANCELLED", cancelledAt: clamp(new Date(at.getTime() + 3 * 86400000)), cancelReason: part.cancel, cancelledById: d.agentId } : {}),
+            },
+          });
+          await db.activity.create({
+            data: {
+              type: "PAYMENT",
+              content: `Payment received Rs. ${part.amount.toLocaleString("en-IN")} for ${inst.label} - ${booking.bookingNo} (Receipt ${no})`,
+              leadId: d.leadId,
+              userId: d.agentId,
+              createdAt: at,
+            },
+          });
+          if (part.cancel) {
+            await db.activity.create({
+              data: {
+                type: "PAYMENT",
+                content: `Receipt ${no} for Rs. ${part.amount.toLocaleString("en-IN")} (${inst.label} - ${booking.bookingNo}) cancelled: ${part.cancel}`,
+                leadId: d.leadId,
+                userId: d.agentId,
+                createdAt: clamp(new Date(at.getTime() + 3 * 86400000)),
+              },
+            });
+          } else {
+            received += part.amount;
+            lastAt = at;
+          }
+        }
         await db.paymentInstallment.update({
           where: { id: inst.id },
-          data: {
-            paidAmount: paid,
-            status: partial ? "PARTIAL" : "PAID",
-            paidAt: paidAt.getTime() > now ? new Date(now - 3600000) : paidAt,
-            method,
-            reference: method === "CHEQUE" ? `00${int(1000, 9999)} HDFC Bank` : method === "UPI" ? `UPI${int(100000000, 999999999)}` : `UTR${int(1000000000, 9999999999)}`,
-            receiptNo: no,
-            recordedById: d.agentId,
-          },
-        });
-        await db.activity.create({
-          data: {
-            type: "PAYMENT",
-            content: `Payment received Rs. ${paid.toLocaleString("en-IN")} for ${inst.label} - ${booking.bookingNo} (Receipt ${no})`,
-            leadId: d.leadId,
-            userId: d.agentId,
-            createdAt: paidAt.getTime() > now ? new Date(now - 3600000) : paidAt,
-          },
+          data: { paidAmount: received, status: received >= inst.amount ? "PAID" : received > 0 ? "PARTIAL" : "PENDING", paidAt: lastAt },
         });
       }
       await db.activity.create({

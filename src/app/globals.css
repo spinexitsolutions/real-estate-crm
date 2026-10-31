@@ -35,6 +35,12 @@ body {
   background: #c7d2fe;
 }
 
+/* Grid items default to min-width:auto, which lets wide tables push cards (and the page)
+   wider than the screen on phones. Let them shrink; tables scroll inside their card. */
+.grid > * {
+  min-width: 0;
+}
+
 @layer components {
   .card {
     @apply rounded-xl border border-slate-200/80 bg-white shadow-card;

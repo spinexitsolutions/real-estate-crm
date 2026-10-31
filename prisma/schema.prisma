@@ -41,7 +41,8 @@ model User {
   siteCheckIns    SiteVisitCheckIn[]
   documents       Document[]          @relation("DocumentUploader")
   bookingsCreated Booking[]           @relation("BookingCreator")
-  paymentsRecorded PaymentInstallment[] @relation("PaymentRecorder")
+  paymentsRecorded Payment[]         @relation("PaymentRecorder")
+  paymentsCancelled Payment[]        @relation("PaymentCanceller")
 }
 
 model Lead {
@@ -351,6 +352,7 @@ model Booking {
   property     Property?            @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   createdBy    User?                @relation("BookingCreator", fields: [createdById], references: [id], onDelete: SetNull)
   installments PaymentInstallment[]
+  payments     Payment[]
   documents    Document[]
 
   @@index([leadId])
@@ -362,24 +364,48 @@ model PaymentInstallment {
   label          String    // Token, Agreement (10%), Slab 1 ...
   dueDate        DateTime
   amount         Float
-  paidAmount     Float     @default(0)
+  paidAmount     Float     @default(0) // sum of non-cancelled payments (kept in sync)
   status         String    @default("PENDING") // PENDING | PARTIAL | PAID | WAIVED
-  paidAt         DateTime?
-  method         String?   // CASH | CHEQUE | UPI | NEFT | RTGS | CARD | HOME_LOAN | OTHER
-  reference      String?   // cheque no / UTR / transaction id
-  receiptNo      String?   @unique
+  paidAt         DateTime? // date of the latest payment
   notes          String?
   reminderSentAt DateTime?
-  recordedById   String?
   sortOrder      Int       @default(0)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  recordedBy User?   @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  booking  Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  payments Payment[]
 
   @@index([dueDate])
   @@index([status])
+}
+
+/// Every amount received gets its own receipt. Receipts are never deleted, only cancelled
+/// (with a reason) so the receipt number sequence stays complete for audits.
+model Payment {
+  id            String    @id @default(cuid())
+  receiptNo     String    @unique
+  bookingId     String
+  installmentId String
+  amount        Float
+  paidAt        DateTime
+  method        String    // UPI | NEFT | RTGS | IMPS | CHEQUE | DD | CASH | CARD | HOME_LOAN | OTHER
+  reference     String?   // cheque no / UTR / transaction id
+  notes         String?
+  status        String    @default("ACTIVE") // ACTIVE | CANCELLED
+  cancelledAt   DateTime?
+  cancelReason  String?
+  cancelledById String?
+  recordedById  String?
+  createdAt     DateTime  @default(now())
+
+  booking     Booking            @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  installment PaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+  recordedBy  User?              @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  cancelledBy User?              @relation("PaymentCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@index([paidAt])
 }
 
 model CallLog {

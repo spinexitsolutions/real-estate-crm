@@ -76,7 +76,7 @@ export async function savePaymentSettings(fd: FormData): Promise<ActionResult> {
   const current = await db.settings.findUnique({ where: { id: 1 }, select: { nextReceiptNo: true } });
   if (next !== null && current && next < current.nextReceiptNo) {
     // Never allow reusing receipt numbers that may already be issued
-    const clash = await db.paymentInstallment.findFirst({ where: { receiptNo: `${receiptPrefix}-${next}` } });
+    const clash = await db.payment.findFirst({ where: { receiptNo: `${receiptPrefix}-${next}` } });
     if (clash) return { error: `Receipt ${receiptPrefix}-${next} already exists. Choose a higher number.` };
   }
   await upsert({ receiptPrefix, waPaymentTemplate: optStr(fd, "waPaymentTemplate"), ...(next !== null ? { nextReceiptNo: next } : {}) });

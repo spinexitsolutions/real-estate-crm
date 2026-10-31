@@ -92,13 +92,13 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Pro
         </div>
       </Card>
 
-      <div className="mb-5 flex gap-1 border-b border-slate-200">
+      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200">
         {tabs.map((t) => (
           <Link
             key={t.value}
             href={t.value === "inbox" ? "/whatsapp" : `/whatsapp?tab=${t.value}`}
             className={cn(
-              "-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition",
+              "-mb-px inline-flex shrink-0 items-center whitespace-nowrap gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition",
               tab === t.value ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800",
             )}
           >

@@ -25,7 +25,9 @@ A real estate CRM built with Next.js and Supabase to manage leads and follow-ups
 - **Bookings and payments**:
   - Bookings created from won deals.
   - Payment plans: construction-linked, 20/80, monthly, or custom.
-  - Part payments, numbered PDF receipts (amount in words) and account statements.
+  - Every payment gets its own numbered PDF receipt (amount in words), including each part payment on an installment, plus account statements.
+  - Receipts are never deleted. A wrong entry or bounced cheque is cancelled with a reason, the receipt stays on record marked CANCELLED (so receipt numbers have no gaps), and the amount is removed from the schedule.
+  - UPI, NEFT, RTGS, IMPS, cheque and DD payments require a transaction or cheque reference.
   - Overdue tracking, and payment-due reminders to the agent and customer (push, email and WhatsApp template).
 - **Customer portal**: a private link (optional PIN) where the buyer sees their booking, payment schedule, receipts and shared documents.
 - **Documents**: KYC (PAN, Aadhaar, photo), agreements, sale deeds and receipts per lead or booking, in a private Supabase bucket. Files can be previewed, downloaded and shared with the customer.

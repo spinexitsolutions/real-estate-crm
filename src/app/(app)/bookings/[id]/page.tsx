@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PaymentHistory } from "@/components/bookings/payment-history";
 import { DocumentsPanel } from "@/components/documents/documents-panel";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -35,7 +36,14 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
       property: true,
       deal: { select: { id: true, title: true } },
       createdBy: { select: { name: true } },
-      installments: { orderBy: [{ sortOrder: "asc" }, { dueDate: "asc" }] },
+      installments: {
+        orderBy: [{ sortOrder: "asc" }, { dueDate: "asc" }],
+        include: { payments: { orderBy: [{ paidAt: "asc" }, { createdAt: "asc" }], select: { id: true, receiptNo: true, amount: true, paidAt: true, method: true, reference: true, status: true } } },
+      },
+      payments: {
+        orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+        include: { installment: { select: { label: true } }, recordedBy: { select: { name: true } } },
+      },
       _count: { select: { documents: true } },
     },
   });
@@ -49,7 +57,7 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
 
   const now = new Date();
   const s = summarizeInstallments(b.installments, now);
-  const payments = b.installments.filter((i) => i.paidAmount > 0).sort((a, c) => (c.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0));
+  const activeReceipts = b.payments.filter((p) => p.status === "ACTIVE").length;
   const access = b.lead.portalAccess;
   const portalUrl = access && !access.revokedAt ? `${origin.replace(/\/$/, "")}/portal/${access.token}` : null;
   const img = b.property ? parseImages(b.property.images)[0] : undefined;
@@ -126,7 +134,7 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <div className="grid gap-6 2xl:grid-cols-3">
-        <div className="space-y-6 2xl:col-span-2">
+        <div className="min-w-0 space-y-6 2xl:col-span-2">
           <Card className="overflow-hidden">
             <CardHeader title="Payment schedule" description={`${b.installments.length} installments`} />
             <InstallmentTable
@@ -138,9 +146,10 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
                 paidAmount: i.paidAmount,
                 status: i.status,
                 paidAt: i.paidAt?.toISOString() ?? null,
-                method: i.method,
-                reference: i.reference,
-                receiptNo: i.receiptNo,
+                receipts: i.payments
+                  .filter((p) => p.status === "ACTIVE")
+                  .map((p) => ({ id: p.id, receiptNo: p.receiptNo, amount: p.amount, paidAt: p.paidAt.toISOString(), method: p.method, reference: p.reference })),
+                hasReceipts: i.payments.length > 0,
                 reminderSentAt: i.reminderSentAt?.toISOString() ?? null,
               }))}
               ctx={{
@@ -158,32 +167,26 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <Card>
-            <CardHeader title="Payment history" description={`${payments.length} receipts issued`} />
-            {payments.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-slate-500">No payments recorded yet.</p>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {payments.map((p) => (
-                  <li key={p.id} className="flex items-center gap-4 px-5 py-3">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                      <Wallet className="size-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-800">
-                        {formatCurrency(p.paidAmount)} <span className="font-normal text-slate-500">for {p.label}</span>
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {p.receiptNo} - {labelOf(PAYMENT_METHODS, p.method ?? "OTHER")}
-                        {p.reference ? ` ${p.reference}` : ""} - {formatDate(p.paidAt)}
-                      </p>
-                    </div>
-                    <a href={`/api/receipts/${p.id}`} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-brand-600 hover:underline">
-                      Receipt
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <CardHeader
+              title="Payment history"
+              description={`${activeReceipts} receipt${activeReceipts === 1 ? "" : "s"} issued${b.payments.length > activeReceipts ? `, ${b.payments.length - activeReceipts} cancelled` : ""}`}
+            />
+            <PaymentHistory
+              canManage={isManager(user)}
+              payments={b.payments.map((p) => ({
+                id: p.id,
+                receiptNo: p.receiptNo,
+                amount: p.amount,
+                paidAt: p.paidAt.toISOString(),
+                method: p.method,
+                reference: p.reference,
+                installmentLabel: p.installment.label,
+                status: p.status,
+                cancelReason: p.cancelReason,
+                cancelledAt: p.cancelledAt?.toISOString() ?? null,
+                recordedBy: p.recordedBy?.name ?? null,
+              }))}
+            />
           </Card>
         </div>
 

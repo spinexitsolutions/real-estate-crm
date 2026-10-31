@@ -271,7 +271,8 @@ export async function deleteInstallment(id: string): Promise<ActionResult> {
   const user = await requireUser();
   const i = await installmentForUser(id, user);
   if (!i) return { error: "Installment not found or access denied." };
-  if (i.paidAmount > 0) return { error: "This installment has payments. Undo the payment first." };
+  const receipts = await db.payment.count({ where: { installmentId: id } });
+  if (receipts > 0) return { error: "Receipts have been issued against this installment, so it cannot be deleted. Waive it instead." };
   await db.paymentInstallment.delete({ where: { id } });
   await syncBookingStatus(i.bookingId);
   revalidatePath("/", "layout");
@@ -307,73 +308,109 @@ export async function setInstallmentWaived(id: string, waived: boolean): Promise
 
 // ---------------------------------------------------------------- payments
 
-export async function recordPayment(installmentId: string, fd: FormData): Promise<ActionResult<{ receiptNo: string }>> {
+/** Recomputes an installment's paid amount / status from its active (non-cancelled) payments. */
+async function syncInstallment(installmentId: string) {
+  const i = await db.paymentInstallment.findUnique({
+    where: { id: installmentId },
+    include: { payments: { where: { status: "ACTIVE" }, orderBy: { paidAt: "desc" }, select: { amount: true, paidAt: true } } },
+  });
+  if (!i) return;
+  const paidAmount = Math.round(i.payments.reduce((t, p) => t + p.amount, 0));
+  const status = i.status === "WAIVED" ? "WAIVED" : paidAmount <= 0 ? "PENDING" : paidAmount >= i.amount ? "PAID" : "PARTIAL";
+  await db.paymentInstallment.update({ where: { id: i.id }, data: { paidAmount, status, paidAt: i.payments[0]?.paidAt ?? null } });
+}
+
+async function paymentForUser(id: string, user: CurrentUser) {
+  const p = await db.payment.findUnique({
+    where: { id },
+    include: { installment: true, booking: { include: { lead: { select: { id: true, name: true, assignedToId: true } } } } },
+  });
+  if (!p) return null;
+  if (user.role === "AGENT" && p.booking.lead.assignedToId !== user.id) return null;
+  return p;
+}
+
+/** Records one payment against an installment. Every payment gets its own receipt number. */
+export async function recordPayment(installmentId: string, fd: FormData): Promise<ActionResult<{ receiptNo: string; paymentId: string }>> {
   const user = await requireUser();
   const i = await installmentForUser(installmentId, user);
   if (!i) return { error: "Installment not found or access denied." };
   if (i.booking.status === "CANCELLED") return { error: "This booking is cancelled." };
   if (i.status === "WAIVED") return { error: "This installment is waived." };
-  const amount = optNum(fd, "amount");
+  const amount = Math.round(optNum(fd, "amount") ?? 0);
   const method = str(fd, "method") || "OTHER";
   const reference = optStr(fd, "reference");
   const notes = optStr(fd, "notes");
   const paidAt = parseDay(str(fd, "paidAt")) ?? new Date();
   if (!amount || amount <= 0) return { error: "Enter the amount received." };
   const due = i.amount - i.paidAmount;
+  if (due <= 0) return { error: "This installment is already fully paid." };
   if (amount > due + 1) return { error: `Amount is more than the balance due (${rs(due)}). Edit the installment amount first if needed.` };
   if (!PAYMENT_METHODS.some((m) => m.value === method)) return { error: "Select a payment mode." };
+  if (["CHEQUE", "DD", "UPI", "NEFT", "RTGS", "IMPS"].includes(method) && !reference) {
+    return { error: `Enter the ${method === "CHEQUE" || method === "DD" ? "cheque / DD number" : "transaction reference (UTR)"} for this payment.` };
+  }
 
-  const receiptNo = await db.$transaction(async (tx) => {
-    let no = i.receiptNo;
-    if (!no) {
-      const s = await tx.settings.update({ where: { id: 1 }, data: { nextReceiptNo: { increment: 1 } } });
-      no = `${s.receiptPrefix}-${s.nextReceiptNo - 1}`;
-    }
-    const paidAmount = Math.min(i.amount, i.paidAmount + Math.round(amount));
-    await tx.paymentInstallment.update({
-      where: { id: i.id },
-      data: {
-        paidAmount,
-        status: paidAmount >= i.amount ? "PAID" : "PARTIAL",
-        paidAt,
-        method,
-        reference,
-        receiptNo: no,
-        recordedById: user.id,
-        notes: [i.notes, notes].filter(Boolean).join("\n") || null,
-      },
+  const payment = await db.$transaction(async (tx) => {
+    // Atomic increment guarantees unique, gap-free receipt numbers even with simultaneous users.
+    const st = await tx.settings.update({ where: { id: 1 }, data: { nextReceiptNo: { increment: 1 } } });
+    const receiptNo = `${st.receiptPrefix}-${st.nextReceiptNo - 1}`;
+    return tx.payment.create({
+      data: { receiptNo, bookingId: i.bookingId, installmentId: i.id, amount, paidAt, method, reference, notes, recordedById: user.id },
     });
-    return no;
   });
+  await syncInstallment(i.id);
 
   await logActivity({
     type: "PAYMENT",
-    content: `Payment received ${rs(Math.round(amount))} for ${i.label} - ${i.booking.bookingNo} (Receipt ${receiptNo}, ${labelOf(PAYMENT_METHODS, method)}${reference ? ` ${reference}` : ""})`,
+    content: `Payment received ${rs(amount)} for ${i.label} - ${i.booking.bookingNo} (Receipt ${payment.receiptNo}, ${labelOf(PAYMENT_METHODS, method)}${reference ? ` ${reference}` : ""})`,
     leadId: i.booking.leadId,
     userId: user.id,
   });
   await syncBookingStatus(i.bookingId);
   revalidatePath("/", "layout");
-  return { ok: true, data: { receiptNo } };
+  return { ok: true, data: { receiptNo: payment.receiptNo, paymentId: payment.id } };
 }
 
-export async function undoPayment(installmentId: string): Promise<ActionResult> {
+/**
+ * Cancels a receipt (e.g. cheque bounced, wrong entry). The receipt is kept and marked
+ * CANCELLED so the numbering stays continuous; the amount is removed from the installment.
+ */
+export async function cancelPayment(paymentId: string, reason: string): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isManager(user)) return { error: "Only managers can undo payments." };
-  const i = await installmentForUser(installmentId, user);
-  if (!i) return { error: "Installment not found." };
-  if (i.paidAmount <= 0) return { ok: true };
-  await db.paymentInstallment.update({
-    where: { id: i.id },
-    data: { paidAmount: 0, status: "PENDING", paidAt: null, method: null, reference: null, receiptNo: null, recordedById: null },
-  });
+  if (!isManager(user)) return { error: "Only managers and admins can cancel receipts." };
+  const p = await paymentForUser(paymentId, user);
+  if (!p) return { error: "Payment not found." };
+  if (p.status === "CANCELLED") return { ok: true };
+  const why = (reason || "").trim();
+  if (why.length < 3) return { error: "Please enter a reason for cancelling this receipt." };
+  await db.payment.update({ where: { id: p.id }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelReason: why.slice(0, 300), cancelledById: user.id } });
+  await syncInstallment(p.installmentId);
   await logActivity({
     type: "PAYMENT",
-    content: `Payment of ${rs(i.paidAmount)} for ${i.label} - ${i.booking.bookingNo} reversed${i.receiptNo ? ` (Receipt ${i.receiptNo} cancelled)` : ""}`,
-    leadId: i.booking.leadId,
+    content: `Receipt ${p.receiptNo} for ${rs(p.amount)} (${p.installment.label} - ${p.booking.bookingNo}) cancelled: ${why}`,
+    leadId: p.booking.leadId,
     userId: user.id,
   });
-  await syncBookingStatus(i.bookingId);
+  await syncBookingStatus(p.bookingId);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Edits non-financial details of a receipt (reference / notes / mode / date). Amount changes need cancel + re-record. */
+export async function updatePaymentDetails(paymentId: string, fd: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  if (!isManager(user)) return { error: "Only managers and admins can edit receipts." };
+  const p = await paymentForUser(paymentId, user);
+  if (!p) return { error: "Payment not found." };
+  if (p.status === "CANCELLED") return { error: "Cancelled receipts cannot be edited." };
+  const method = str(fd, "method") || p.method;
+  if (!PAYMENT_METHODS.some((m) => m.value === method)) return { error: "Select a payment mode." };
+  await db.payment.update({
+    where: { id: p.id },
+    data: { method, reference: optStr(fd, "reference"), notes: optStr(fd, "notes"), paidAt: parseDay(str(fd, "paidAt")) ?? p.paidAt },
+  });
+  await syncInstallment(p.installmentId);
   revalidatePath("/", "layout");
   return { ok: true };
 }

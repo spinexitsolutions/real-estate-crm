@@ -116,10 +116,11 @@ function propertyLine(p: { title: string; code: string; type: string; locality: 
 
 /* ------------------------------------------------------------------ receipt */
 
-export async function loadInstallmentForReceipt(installmentId: string) {
-  return db.paymentInstallment.findUnique({
-    where: { id: installmentId },
+export async function loadPaymentForReceipt(paymentId: string) {
+  return db.payment.findUnique({
+    where: { id: paymentId },
     include: {
+      installment: true,
       booking: {
         include: {
           lead: { select: { id: true, name: true, phone: true, email: true, assignedToId: true } },
@@ -131,22 +132,47 @@ export async function loadInstallmentForReceipt(installmentId: string) {
   });
 }
 
-export async function renderReceiptPdf(installmentId: string) {
-  const i = await loadInstallmentForReceipt(installmentId);
-  if (!i || i.paidAmount <= 0 || !i.receiptNo) return null;
+export async function renderReceiptPdf(paymentId: string) {
+  const p = await loadPaymentForReceipt(paymentId);
+  if (!p) return null;
+  const i = p.installment;
   const c = await company();
-  const b = i.booking;
+  const b = p.booking;
   const summary = summarizeInstallments(b.installments);
+  const cancelled = p.status === "CANCELLED";
+
+  // Amount already received against this installment before this receipt (active receipts only)
+  const earlier = await db.payment.aggregate({
+    where: {
+      installmentId: i.id,
+      status: "ACTIVE",
+      id: { not: p.id },
+      OR: [{ paidAt: { lt: p.paidAt } }, { paidAt: p.paidAt, createdAt: { lt: p.createdAt } }],
+    },
+    _sum: { amount: true },
+  });
+  const before = earlier._sum.amount ?? 0;
+  const afterThis = before + (cancelled ? 0 : p.amount);
 
   const doc = (
-    <Document title={`Receipt ${i.receiptNo}`} author={c.name}>
+    <Document title={`Receipt ${p.receiptNo}`} author={c.name}>
       <Page size="A4" style={styles.page}>
-        <Header c={c} docTitle="PAYMENT RECEIPT" docNo={i.receiptNo} docDate={formatDate(i.paidAt ?? i.updatedAt)} />
+        <Header c={c} docTitle={cancelled ? "PAYMENT RECEIPT (CANCELLED)" : "PAYMENT RECEIPT"} docNo={p.receiptNo} docDate={formatDate(p.paidAt)} />
+
+        {cancelled && (
+          <View style={[styles.box, { marginTop: 16, borderColor: "#fecdd3", backgroundColor: "#fff1f2" }]}>
+            <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: "#be123c" }}>THIS RECEIPT HAS BEEN CANCELLED</Text>
+            <Text style={[styles.small, { marginTop: 4, color: "#9f1239" }]}>
+              Cancelled on {formatDate(p.cancelledAt)}
+              {p.cancelReason ? ` - Reason: ${p.cancelReason}` : ""}. The amount below is not counted towards your payments.
+            </Text>
+          </View>
+        )}
 
         <View style={[styles.box, { marginTop: 16 }]}>
           <Text style={{ fontSize: 10 }}>
             Received with thanks from <Text style={{ fontFamily: "Helvetica-Bold" }}>{b.lead.name}</Text> ({b.lead.phone}) a sum of{" "}
-            <Text style={{ fontFamily: "Helvetica-Bold" }}>{inr(i.paidAmount)}</Text> towards <Text style={{ fontFamily: "Helvetica-Bold" }}>{i.label}</Text> for booking{" "}
+            <Text style={{ fontFamily: "Helvetica-Bold" }}>{inr(p.amount)}</Text> towards <Text style={{ fontFamily: "Helvetica-Bold" }}>{i.label}</Text> for booking{" "}
             {b.bookingNo}.
           </Text>
         </View>
@@ -154,14 +180,16 @@ export async function renderReceiptPdf(installmentId: string) {
         <View style={[styles.row, { marginTop: 14, gap: 12 }]}>
           <View style={[styles.box, { flex: 1.3, backgroundColor: "#f8fafc" }]}>
             <Text style={styles.label}>Amount received</Text>
-            <Text style={{ fontSize: 20, lineHeight: 1.25, fontFamily: "Helvetica-Bold", color: c.color }}>{inr(i.paidAmount)}</Text>
-            <Text style={[styles.small, { marginTop: 6 }]}>{amountInWordsINR(i.paidAmount)}</Text>
+            <Text style={{ fontSize: 20, lineHeight: 1.25, fontFamily: "Helvetica-Bold", color: cancelled ? "#94a3b8" : c.color, textDecoration: cancelled ? "line-through" : "none" }}>
+              {inr(p.amount)}
+            </Text>
+            <Text style={[styles.small, { marginTop: 6 }]}>{amountInWordsINR(p.amount)}</Text>
           </View>
           <View style={[styles.box, { flex: 1 }]}>
             <Text style={styles.label}>Payment mode</Text>
-            <Text style={styles.value}>{labelOf(PAYMENT_METHODS, i.method ?? "OTHER")}</Text>
+            <Text style={styles.value}>{labelOf(PAYMENT_METHODS, p.method)}</Text>
             <Text style={[styles.label, { marginTop: 8 }]}>Reference</Text>
-            <Text style={styles.value}>{i.reference || "-"}</Text>
+            <Text style={styles.value}>{p.reference || "-"}</Text>
           </View>
         </View>
 
@@ -182,8 +210,9 @@ export async function renderReceiptPdf(installmentId: string) {
             <Text style={{ flex: 1.4, textAlign: "right" }}>Amount</Text>
           </View>
           <Row label={`Installment: ${i.label} (due ${formatDate(i.dueDate)})`} value={inr(i.amount)} />
-          <Row label="Received against this installment (to date)" value={inr(i.paidAmount)} />
-          <Row label="Balance on this installment" value={inr(Math.max(0, i.amount - i.paidAmount))} />
+          <Row label="Received earlier against this installment" value={inr(before)} />
+          <Row label={cancelled ? "This receipt (cancelled, not counted)" : "Received with this receipt"} value={inr(cancelled ? 0 : p.amount)} />
+          <Row label="Balance on this installment after this receipt" value={inr(Math.max(0, i.amount - afterThis))} />
           <Row label="Total agreement value" value={inr(summary.total)} />
           <Row label="Total received to date" value={inr(summary.paid)} />
           <Row label="Total balance outstanding" value={inr(summary.outstanding)} bold color={c.color} />
@@ -208,7 +237,7 @@ export async function renderReceiptPdf(installmentId: string) {
       </Page>
     </Document>
   );
-  return { buffer: await renderToBuffer(doc), filename: `Receipt-${i.receiptNo}.pdf`, installment: i };
+  return { buffer: await renderToBuffer(doc), filename: `Receipt-${p.receiptNo}.pdf`, payment: p };
 }
 
 function Row({ label, value, bold, color }: { label: string; value: string; bold?: boolean; color?: string }) {
@@ -229,7 +258,10 @@ export async function loadBookingForStatement(bookingId: string) {
     include: {
       lead: { select: { id: true, name: true, phone: true, email: true, assignedToId: true } },
       property: { select: { title: true, code: true, type: true, locality: true, city: true } },
-      installments: { orderBy: [{ sortOrder: "asc" }, { dueDate: "asc" }] },
+      installments: {
+        orderBy: [{ sortOrder: "asc" }, { dueDate: "asc" }],
+        include: { payments: { where: { status: "ACTIVE" }, orderBy: { paidAt: "asc" } } },
+      },
     },
   });
 }
@@ -289,11 +321,11 @@ export async function renderStatementPdf(bookingId: string) {
                 <Text style={{ width: 18, color: "#94a3b8" }}>{n + 1}</Text>
                 <View style={{ flex: 3 }}>
                   <Text>{i.label}</Text>
-                  {i.receiptNo && (
-                    <Text style={[styles.small, styles.muted]}>
-                      {i.receiptNo} - {formatDate(i.paidAt)}
+                  {i.payments.map((p) => (
+                    <Text key={p.id} style={[styles.small, styles.muted]}>
+                      {p.receiptNo} - {formatDate(p.paidAt)} - {inr(p.amount)} ({labelOf(PAYMENT_METHODS, p.method)})
                     </Text>
-                  )}
+                  ))}
                 </View>
                 <Text style={{ flex: 1.3 }}>{formatDate(i.dueDate)}</Text>
                 <Text style={{ flex: 1.5, textAlign: "right" }}>{inr(i.amount)}</Text>

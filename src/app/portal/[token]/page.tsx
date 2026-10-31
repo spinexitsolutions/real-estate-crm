@@ -89,7 +89,10 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
         orderBy: { bookingDate: "desc" },
         include: {
           property: { select: { title: true, images: true, locality: true, city: true, code: true } },
-          installments: { orderBy: [{ sortOrder: "asc" }, { dueDate: "asc" }] },
+          installments: {
+            orderBy: [{ sortOrder: "asc" }, { dueDate: "asc" }],
+            include: { payments: { where: { status: "ACTIVE" }, orderBy: [{ paidAt: "asc" }, { createdAt: "asc" }], select: { id: true, receiptNo: true, amount: true, paidAt: true } } },
+          },
         },
       },
       documents: { where: { visibleToCustomer: true }, orderBy: { createdAt: "desc" } },
@@ -188,24 +191,24 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
                             Due {formatDate(i.dueDate)}
                             {i.paidAmount > 0 && i.status !== "PAID" ? ` - paid ${formatCurrency(i.paidAmount)}` : ""}
                           </p>
+                          {i.payments.map((p) => (
+                            <a
+                              key={p.id}
+                              href={`/api/public/portal/${token}/receipt/${p.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 flex items-center gap-1.5 text-xs font-medium hover:underline"
+                              style={{ color }}
+                            >
+                              <Download className="size-3.5" />
+                              Receipt {p.receiptNo} - {formatCurrency(p.amount)} on {formatDate(p.paidAt)}
+                            </a>
+                          ))}
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-semibold text-slate-900">{formatCurrency(i.amount)}</p>
                           <span className={cn("mt-0.5 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset", st.cls)}>{st.label}</span>
                         </div>
-                        {i.receiptNo ? (
-                          <a
-                            href={`/api/public/portal/${token}/receipt/${i.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            title={`Receipt ${i.receiptNo}`}
-                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                          >
-                            <Download className="size-4" />
-                          </a>
-                        ) : (
-                          <span className="w-8" />
-                        )}
                       </li>
                     );
                   })}
