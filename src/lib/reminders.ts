@@ -1,3 +1,4 @@
+import { runPaymentReminders } from "./payment-reminders";
 import "server-only";
 import { endOfDay, format, startOfDay, subDays } from "date-fns";
 import { db } from "./db";
@@ -12,6 +13,7 @@ export type ReminderRunResult = {
   remindersSent: number;
   digest: { ran: boolean; reason?: string; emails: number; whatsapp: number; skipped: number };
   cleanup: { loginAttempts: number; resetTokens: number };
+  payments: Awaited<ReturnType<typeof runPaymentReminders>>;
 };
 
 /** (a) Push reminders for follow-ups due soon. */
@@ -134,6 +136,7 @@ export async function runReminderJobs(opts: { origin?: string } = {}): Promise<R
   const now = new Date();
   const remindersSent = await sendDueReminders(now);
   const digest = await sendDailyDigest(now, { origin: opts.origin });
+  const payments = await runPaymentReminders(now);
   const cleanup = await cleanupSecurityTables(now);
-  return { remindersSent, digest, cleanup };
+  return { remindersSent, digest, payments, cleanup };
 }

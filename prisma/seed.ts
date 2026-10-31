@@ -518,6 +518,92 @@ async function main() {
     }
   }
 
+  // ---------------------------------------------------------------- bookings & payments
+  console.log("Creating bookings and payment schedules...");
+  {
+    const { buildPlan } = await import("../src/lib/payment-plan");
+    await db.portalAccess.deleteMany();
+    await db.booking.deleteMany();
+    const wonDeals = await db.deal.findMany({
+      where: { stage: "WON", property: { listingType: "SALE" } },
+      include: { property: true, lead: true },
+      orderBy: { closedAt: "desc" },
+      take: 4,
+    });
+    const methods = ["UPI", "NEFT", "RTGS", "CHEQUE", "HOME_LOAN"];
+    let receiptNo = 1001;
+    const year = new Date().getFullYear();
+    for (let n = 0; n < wonDeals.length; n++) {
+      const d = wonDeals[n];
+      // Spread booking dates so schedules are at different stages
+      const bookedAt = new Date();
+      bookedAt.setDate(bookedAt.getDate() - [210, 130, 75, 25][n]);
+      bookedAt.setHours(0, 0, 0, 0);
+      const total = Math.round(d.value);
+      const plan = buildPlan(n === 2 ? "DOWN_PAYMENT" : "CONSTRUCTION_LINKED", total, bookedAt, { tokenAmount: total > 20000000 ? 200000 : 100000, possessionMonths: 10 });
+      const booking = await db.booking.create({
+        data: {
+          bookingNo: `BK-${year}-${String(n + 1).padStart(4, "0")}`,
+          dealId: d.id,
+          leadId: d.leadId,
+          propertyId: d.propertyId,
+          unitNumber: `${["A", "B", "C", "D"][n]}-${1 + n}0${2 + n}`,
+          bookingDate: bookedAt,
+          agreementDate: new Date(bookedAt.getTime() + 30 * 86400000),
+          totalAmount: total,
+          notes: n === 1 ? "Covered parking included. Floor rise waived as a goodwill gesture." : null,
+          createdById: d.agentId,
+          installments: { create: plan.map((r, i) => ({ label: r.label, dueDate: r.dueDate, amount: r.amount, sortOrder: i })) },
+        },
+        include: { installments: { orderBy: { sortOrder: "asc" } } },
+      });
+      await db.property.update({ where: { id: d.propertyId! }, data: { status: "SOLD" } });
+
+      const now = Date.now();
+      const pastDue = booking.installments.filter((i) => i.dueDate.getTime() < now);
+      for (let k = 0; k < pastDue.length; k++) {
+        const inst = pastDue[k];
+        const isLast = k === pastDue.length - 1;
+        // Booking #2: latest past-due installment left unpaid (overdue). Booking #3: latest one part-paid.
+        if (n === 1 && isLast && k > 0) continue;
+        const partial = n === 2 && isLast && k > 0;
+        const paid = partial ? Math.round(inst.amount * 0.4) : inst.amount;
+        const paidAt = new Date(inst.dueDate.getTime() + int(0, 4) * 86400000);
+        const method = k === 0 ? "UPI" : methods[(k + n) % methods.length];
+        const no = `RCPT-${receiptNo++}`;
+        await db.paymentInstallment.update({
+          where: { id: inst.id },
+          data: {
+            paidAmount: paid,
+            status: partial ? "PARTIAL" : "PAID",
+            paidAt: paidAt.getTime() > now ? new Date(now - 3600000) : paidAt,
+            method,
+            reference: method === "CHEQUE" ? `00${int(1000, 9999)} HDFC Bank` : method === "UPI" ? `UPI${int(100000000, 999999999)}` : `UTR${int(1000000000, 9999999999)}`,
+            receiptNo: no,
+            recordedById: d.agentId,
+          },
+        });
+        await db.activity.create({
+          data: {
+            type: "PAYMENT",
+            content: `Payment received Rs. ${paid.toLocaleString("en-IN")} for ${inst.label} - ${booking.bookingNo} (Receipt ${no})`,
+            leadId: d.leadId,
+            userId: d.agentId,
+            createdAt: paidAt.getTime() > now ? new Date(now - 3600000) : paidAt,
+          },
+        });
+      }
+      await db.activity.create({
+        data: { type: "PAYMENT", content: `Booking ${booking.bookingNo} created for Rs. ${total.toLocaleString("en-IN")} with ${plan.length} installments`, leadId: d.leadId, userId: d.agentId, createdAt: bookedAt },
+      });
+      if (n === 0) {
+        await db.portalAccess.create({ data: { leadId: d.leadId, token: "demo-portal-token-123456", lastViewedAt: new Date(now - 2 * 86400000) } });
+      }
+    }
+    await db.settings.update({ where: { id: 1 }, data: { nextReceiptNo: receiptNo } });
+    console.log(`  ${wonDeals.length} bookings, ${receiptNo - 1001} receipts. Demo customer portal: /portal/demo-portal-token-123456`);
+  }
+
   console.log("\nDone. Sign in with:");
   console.log("  Admin   -> admin@estatedesk.com / admin123");
   console.log("  Manager -> manager@estatedesk.com / admin123");

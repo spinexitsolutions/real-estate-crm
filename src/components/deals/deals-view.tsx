@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Building2, CalendarDays, Ellipsis, Handshake, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, CalendarDays, Ellipsis, Handshake, Pencil, Plus, Trash2, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import { deleteDeal, updateDealStage } from "@/actions/deals";
 import { Avatar } from "@/components/ui/avatar";
@@ -150,6 +150,11 @@ export function DealsView({
           >
             Edit deal
           </DropdownItem>
+          {d.stage !== "LOST" && (
+            <DropdownItem icon={ReceiptText} href={`/bookings/new?dealId=${d.id}`} onClick={close}>
+              {d.stage === "WON" ? "Create booking & payment plan" : "Book this deal"}
+            </DropdownItem>
+          )}
           <div className="my-1 border-t border-slate-100" />
           <p className="px-2.5 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">Move to</p>
           {DEAL_STAGES.filter((s) => s.value !== d.stage).map((s) => (

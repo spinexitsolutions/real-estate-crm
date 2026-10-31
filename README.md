@@ -22,6 +22,28 @@ A real estate CRM built with Next.js and Supabase to manage leads and follow-ups
   - Click-to-chat with templates.
   - Two-way inbox for customer replies via the Cloud API webhook.
   - Approved Meta templates, handling of the 24-hour window, broadcast, and delivery and read ticks.
+- **Bookings and payments**:
+  - Bookings created from won deals.
+  - Payment plans: construction-linked, 20/80, monthly, or custom.
+  - Part payments, numbered PDF receipts (amount in words) and account statements.
+  - Overdue tracking, and payment-due reminders to the agent and customer (push, email and WhatsApp template).
+- **Customer portal**: a private link (optional PIN) where the buyer sees their booking, payment schedule, receipts and shared documents.
+- **Documents**: KYC (PAN, Aadhaar, photo), agreements, sale deeds and receipts per lead or booking, in a private Supabase bucket. Files can be previewed, downloaded and shared with the customer.
+- **Property brochure PDF**: company logo, brand colour, photos, specs and agent contact (never owner details). Can be shared on WhatsApp as a signed link.
+- **Public website** (`/site`): home page, search, property pages with enquiry form and brochure download. Only published listings appear, and enquiries become leads automatically.
+- **Portal integrations**:
+  - Facebook and Instagram Lead Ads (webhook).
+  - 99acres, MagicBricks and Housing.com lead push URLs.
+  - Lead-email forwarding.
+  - An integration log.
+- **Calls**:
+  - Click-to-call through Exotel or Knowlarity, with call recordings and missed-call follow-ups.
+  - Manual call logging with outcome.
+  - A calls dashboard.
+- **Attendance and site visits**:
+  - GPS check-in and check-out with distance from the office.
+  - Late and absent tracking, team view and CSV export.
+  - Site-visit check-in that records distance from the property.
 - **Reports**: source ROI, conversion funnel, revenue, agent leaderboard with targets, lost reasons and inventory. CSV export and print to PDF.
 - **Team and roles**: Admin, Manager and Agent roles. Agents see only their own data. Monthly targets, and reassignment when someone is deactivated.
 - **Security**:
@@ -125,6 +147,23 @@ With an empty database, open `/register` to create the first admin account.
   2. In your Meta app, set the webhook to `https://your-domain/api/webhooks/whatsapp` with the verify token shown in Settings, and subscribe to `messages`.
   3. Replies then appear in **WhatsApp > Inbox**.
 - **Approved templates:** WhatsApp lets you send free text only within 24 hours of the customer's last message. For anything else, including broadcasts, add the approved Meta template name and parameter order to the template in **WhatsApp > Templates**.
+
+## Click-to-call (Exotel / Knowlarity)
+
+1. Go to **Settings > Click-to-call**, choose the provider and enter its credentials.
+2. Paste the callback URL shown there into the provider dashboard.
+3. Each agent must add their mobile number in **My Profile**. The provider rings the agent first, then connects the customer. Calls and recordings appear on the lead and on the Calls page.
+
+## Portal integrations
+
+Open **Integrations** (Admin/Manager) for each portal's webhook URL, setup steps and a "Send test lead" button.
+- **Facebook / Instagram:** add the webhook to your Meta app (Page > `leadgen`) with the verify token, plus a Page access token with `leads_retrieval` permission.
+- **99acres / MagicBricks / Housing.com:** share the URL with your portal account manager and ask them to enable lead push to your CRM. Lead-notification emails can also be forwarded to the email webhook.
+
+## Public website and customer portal
+
+- Enable the website in **Settings > Public website**, and switch on "Publish on website" for each property. The site is at `/site`.
+- Create a customer portal link from the lead or booking page (optional PIN) and share it on WhatsApp.
 
 ## Lead capture webhook
 

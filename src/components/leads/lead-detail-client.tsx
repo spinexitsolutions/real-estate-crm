@@ -32,6 +32,7 @@ import { DealFormModal } from "@/components/deals/deal-form";
 import { LEAD_STATUSES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { LeadFormModal, type LeadFormValues } from "./lead-form";
+import { CallButton } from "@/components/calls/call-button";
 import { LOST_REASONS } from "./leads-board";
 
 type Opt = { id: string; name: string };
@@ -46,6 +47,7 @@ export function LeadHeaderActions({
   currentUserId,
   defaultCommission,
   currency,
+  clickToCallEnabled,
 }: {
   lead: LeadFormValues;
   users: Opt[];
@@ -55,14 +57,13 @@ export function LeadHeaderActions({
   currentUserId: string;
   defaultCommission: number;
   currency: string;
+  clickToCallEnabled: boolean;
 }) {
   const router = useRouter();
   const [modal, setModal] = useState<"edit" | "followup" | "deal" | "delete" | null>(null);
   return (
     <>
-      <a href={`tel:${lead.phone}`} className={buttonClass("secondary")}>
-        <Phone /> Call
-      </a>
+      <CallButton lead={{ id: lead.id, name: lead.name, phone: lead.phone }} clickToCallEnabled={clickToCallEnabled} />
       {lead.email && (
         <a href={`mailto:${lead.email}`} title="Send email" className={buttonClass("secondary", "icon")}>
           <Mail />

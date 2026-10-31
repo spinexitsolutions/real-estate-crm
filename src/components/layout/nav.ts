@@ -9,6 +9,12 @@ import {
   Building2,
   Users,
   UserCog,
+  ReceiptText,
+  PhoneCall,
+  FolderOpen,
+  Globe,
+  UserCheck,
+  PlugZap,
   type LucideIcon,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/ui/icons";
@@ -20,6 +26,7 @@ export type NavItem = {
   roles?: string[];
   badgeKey?: "followups" | "whatsapp";
   match?: (path: string, search: string) => boolean;
+  external?: boolean;
 };
 
 export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
@@ -34,12 +41,18 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: "/leads?view=board", label: "Pipeline", icon: Kanban, match: (p, s) => p === "/leads" && s.includes("view=board") },
       { href: "/follow-ups", label: "Follow-ups", icon: CalendarClock, badgeKey: "followups" },
       { href: "/deals", label: "Deals", icon: Handshake },
+      { href: "/bookings", label: "Bookings & Payments", icon: ReceiptText },
       { href: "/properties", label: "Properties", icon: Building2 },
+      { href: "/documents", label: "Documents", icon: FolderOpen },
     ],
   },
   {
     title: "Engage",
-    items: [{ href: "/whatsapp", label: "WhatsApp", icon: WhatsAppIcon, badgeKey: "whatsapp" }],
+    items: [
+      { href: "/whatsapp", label: "WhatsApp", icon: WhatsAppIcon, badgeKey: "whatsapp" },
+      { href: "/calls", label: "Calls", icon: PhoneCall },
+      { href: "/site", label: "Public Website", icon: Globe, external: true },
+    ],
   },
   {
     title: "Insights",
@@ -51,7 +64,9 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
   {
     title: "Workspace",
     items: [
+      { href: "/attendance", label: "Attendance", icon: UserCheck },
       { href: "/team", label: "Team", icon: UserCog, roles: ["ADMIN", "MANAGER"] },
+      { href: "/integrations", label: "Integrations", icon: PlugZap, roles: ["ADMIN", "MANAGER"] },
       { href: "/settings", label: "Settings", icon: Settings, roles: ["ADMIN"] },
     ],
   },

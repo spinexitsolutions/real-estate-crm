@@ -154,8 +154,8 @@ export async function renderReceiptPdf(installmentId: string) {
         <View style={[styles.row, { marginTop: 14, gap: 12 }]}>
           <View style={[styles.box, { flex: 1.3, backgroundColor: "#f8fafc" }]}>
             <Text style={styles.label}>Amount received</Text>
-            <Text style={{ fontSize: 20, fontFamily: "Helvetica-Bold", color: c.color }}>{inr(i.paidAmount)}</Text>
-            <Text style={[styles.small, { marginTop: 4 }]}>{amountInWordsINR(i.paidAmount)}</Text>
+            <Text style={{ fontSize: 20, lineHeight: 1.25, fontFamily: "Helvetica-Bold", color: c.color }}>{inr(i.paidAmount)}</Text>
+            <Text style={[styles.small, { marginTop: 6 }]}>{amountInWordsINR(i.paidAmount)}</Text>
           </View>
           <View style={[styles.box, { flex: 1 }]}>
             <Text style={styles.label}>Payment mode</Text>

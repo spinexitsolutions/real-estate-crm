@@ -11,9 +11,12 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.role !== "ADMIN") return NextResponse.json({ error: "Only administrators can download backups." }, { status: 403 });
 
-  const [users, settings, leads, properties, leadProperties, followUps, deals, activities, templates, messages] = await Promise.all([
+  const [users, settings, leads, properties, leadProperties, followUps, deals, activities, templates, messages, bookings, installments, calls, attendance, siteCheckIns, documents, portalAccess] = await Promise.all([
     db.user.findMany({ omit: { password: true }, orderBy: { createdAt: "asc" } }),
-    db.settings.findUnique({ where: { id: 1 }, omit: { waAccessToken: true, waAppSecret: true } }),
+    db.settings.findUnique({
+      where: { id: 1 },
+      omit: { waAccessToken: true, waAppSecret: true, fbAppSecret: true, fbPageAccessToken: true, exotelApiKey: true, exotelApiToken: true, knowlarityApiKey: true, knowlarityAuthToken: true },
+    }),
     db.lead.findMany({ orderBy: { createdAt: "asc" } }),
     db.property.findMany({ orderBy: { createdAt: "asc" } }),
     db.leadProperty.findMany(),
@@ -22,14 +25,21 @@ export async function GET() {
     db.activity.findMany({ orderBy: { createdAt: "asc" } }),
     db.whatsAppTemplate.findMany({ orderBy: { createdAt: "asc" } }),
     db.whatsAppMessage.findMany({ orderBy: { createdAt: "asc" } }),
+    db.booking.findMany({ orderBy: { createdAt: "asc" } }),
+    db.paymentInstallment.findMany({ orderBy: [{ bookingId: "asc" }, { sortOrder: "asc" }] }),
+    db.callLog.findMany({ orderBy: { startedAt: "asc" } }),
+    db.attendance.findMany({ orderBy: { checkInAt: "asc" } }),
+    db.siteVisitCheckIn.findMany({ orderBy: { createdAt: "asc" } }),
+    db.document.findMany({ orderBy: { createdAt: "asc" } }),
+    db.portalAccess.findMany({ omit: { token: true, pin: true } }),
   ]);
 
-  const data = { users, settings, leads, properties, leadProperties, followUps, deals, activities, templates, messages };
+  const data = { users, settings, leads, properties, leadProperties, followUps, deals, activities, templates, messages, bookings, installments, calls, attendance, siteCheckIns, documents, portalAccess };
   const counts = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, Array.isArray(v) ? v.length : v ? 1 : 0]));
   const now = new Date();
   const body = JSON.stringify(
     {
-      meta: { app: "EstateDesk CRM", version: 1, exportedAt: now.toISOString(), exportedBy: user.email, counts, note: "Password hashes and API secrets are excluded." },
+      meta: { app: "EstateDesk CRM", version: 1, exportedAt: now.toISOString(), exportedBy: user.email, counts, note: "Password hashes, API secrets and customer portal tokens are excluded. Document files are stored in Supabase Storage (metadata only here)." },
       data,
     },
     null,

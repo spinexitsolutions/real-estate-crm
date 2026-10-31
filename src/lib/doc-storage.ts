@@ -68,7 +68,7 @@ export async function uploadDocument(bytes: Buffer, mime: DocMime, folder: strin
   }
   const abs = safeLocal(storagePath)!;
   await mkdir(path.dirname(abs), { recursive: true });
-  await writeFile(abs, bytes);
+  await writeFile(/*turbopackIgnore: true*/ abs, bytes);
   return { storagePath };
 }
 
@@ -88,7 +88,7 @@ export async function readLocalDocument(storagePath: string) {
   const abs = safeLocal(storagePath);
   if (!abs) return null;
   try {
-    return await readFile(abs);
+    return await readFile(/*turbopackIgnore: true*/ abs);
   } catch {
     return null;
   }

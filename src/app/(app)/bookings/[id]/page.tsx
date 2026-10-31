@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DocumentsPanel } from "@/components/documents/documents-panel";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Building2, CalendarDays, CircleAlert, FileText, ReceiptText, UserRound, Wallet } from "lucide-react";
@@ -124,8 +125,8 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
         <Stat label="Overdue" value={formatCurrency(s.overdue)} tone={s.overdue ? "text-rose-600" : undefined} sub={s.overdueCount ? `${s.overdueCount} installment(s)` : "On track"} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
+      <div className="grid gap-6 2xl:grid-cols-3">
+        <div className="space-y-6 2xl:col-span-2">
           <Card className="overflow-hidden">
             <CardHeader title="Payment schedule" description={`${b.installments.length} installments`} />
             <InstallmentTable
@@ -265,21 +266,10 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
             access={access ? { token: access.token, hasPin: !!access.pin, lastViewedAt: access.lastViewedAt?.toISOString() ?? null, revokedAt: access.revokedAt?.toISOString() ?? null } : null}
           />
 
-          <Card className="p-5">
-            <div className="flex items-center gap-3">
-              <span className="flex size-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                <FileText className="size-[18px]" />
-              </span>
-              <div>
-                <p className="text-sm font-medium text-slate-800">{b._count.documents} documents linked</p>
-                <Link href={`/documents?bookingId=${b.id}`} className="text-xs font-medium text-brand-600 hover:underline">
-                  Agreement, KYC and receipts
-                </Link>
-              </div>
-            </div>
-          </Card>
         </div>
       </div>
+
+      <DocumentsPanel bookingId={b.id} leadId={b.leadId} title="Booking documents" />
     </div>
   );
 }

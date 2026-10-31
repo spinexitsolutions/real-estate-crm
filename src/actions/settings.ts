@@ -66,3 +66,19 @@ export async function regenerateWebhookKey(): Promise<ActionResult<string>> {
   await upsert({ leadWebhookKey: key });
   return { ok: true, data: key };
 }
+
+export async function savePaymentSettings(fd: FormData): Promise<ActionResult> {
+  if (!(await guard())) return { error: "Only administrators can change settings." };
+  const receiptPrefix = str(fd, "receiptPrefix").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 12);
+  if (!receiptPrefix) return { error: "Receipt prefix is required." };
+  const next = optNum(fd, "nextReceiptNo");
+  if (next !== null && (!Number.isInteger(next) || next < 1)) return { error: "Next receipt number must be a positive whole number." };
+  const current = await db.settings.findUnique({ where: { id: 1 }, select: { nextReceiptNo: true } });
+  if (next !== null && current && next < current.nextReceiptNo) {
+    // Never allow reusing receipt numbers that may already be issued
+    const clash = await db.paymentInstallment.findFirst({ where: { receiptNo: `${receiptPrefix}-${next}` } });
+    if (clash) return { error: `Receipt ${receiptPrefix}-${next} already exists. Choose a higher number.` };
+  }
+  await upsert({ receiptPrefix, waPaymentTemplate: optStr(fd, "waPaymentTemplate"), ...(next !== null ? { nextReceiptNo: next } : {}) });
+  return { ok: true };
+}

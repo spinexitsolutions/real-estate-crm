@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
@@ -20,6 +21,8 @@ import {
   Wallet,
   ArrowRightLeft,
   CalendarCheck,
+  FileText,
+  MapPinCheck,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { isManager, requireUser } from "@/lib/auth";
@@ -35,6 +38,12 @@ import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { WhatsAppIcon } from "@/components/ui/icons";
 import { SendWhatsAppButton } from "@/components/whatsapp/send-whatsapp";
 import { FollowUpList } from "@/components/followups/followup-list";
+import { telephonyStatus } from "@/lib/telephony";
+import { LeadCallsCard } from "@/components/calls/lead-calls-card";
+import { LeadCheckInsCard } from "@/components/site-visits/lead-checkins-card";
+import { DocumentsPanel } from "@/components/documents/documents-panel";
+import { LeadBookingsCard } from "@/components/bookings/lead-bookings-card";
+import { PortalAccessCard } from "@/components/portal/portal-access-card";
 import { AssignSelect, DeleteActivityButton, LeadHeaderActions, NoteComposer, ShortlistButton, StatusStepper } from "@/components/leads/lead-detail-client";
 
 const ACTIVITY_ICONS: Record<string, { icon: React.ComponentType<{ className?: string }>; tone: string }> = {
@@ -49,6 +58,9 @@ const ACTIVITY_ICONS: Record<string, { icon: React.ComponentType<{ className?: s
   ASSIGNED: { icon: UserPlus, tone: "bg-slate-100 text-slate-600" },
   DEAL: { icon: Handshake, tone: "bg-emerald-50 text-emerald-600" },
   PROPERTY: { icon: Building2, tone: "bg-orange-50 text-orange-600" },
+  DOCUMENT: { icon: FileText, tone: "bg-slate-100 text-slate-600" },
+  SITE_VISIT: { icon: MapPinCheck, tone: "bg-amber-50 text-amber-600" },
+  PAYMENT: { icon: Wallet, tone: "bg-emerald-50 text-emerald-600" },
 };
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -76,12 +88,17 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       deals: { orderBy: { createdAt: "desc" }, include: { property: { select: { title: true } } } },
       interests: { include: { property: true }, orderBy: { createdAt: "desc" } },
       _count: { select: { messages: true } },
+      portalAccess: true,
     },
   });
   if (!lead) notFound();
   if (user.role === "AGENT" && lead.assignedToId !== user.id) notFound();
 
   const manager = isManager(user);
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const origin = process.env.APP_URL || `${h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https")}://${host}`;
+  const pa = lead.portalAccess;
   const [users, properties, leadsForDeal] = await Promise.all([
     db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.property.findMany({ where: { status: { in: ["AVAILABLE", "RESERVED"] } }, orderBy: { createdAt: "desc" } }),
@@ -173,6 +190,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               currentUserId={user.id}
               defaultCommission={settings.defaultCommission}
               currency={cur}
+              clickToCallEnabled={telephonyStatus(settings).enabled}
             />
           </div>
         </div>
@@ -230,6 +248,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               </ol>
             </div>
           </Card>
+
+          <LeadCallsCard leadId={lead.id} />
+          <DocumentsPanel leadId={lead.id} />
         </div>
 
         <div className="space-y-6">
@@ -360,6 +381,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               </ul>
             )}
           </Card>
+
+          <LeadBookingsCard leadId={lead.id} />
+
+          <PortalAccessCard
+            leadId={lead.id}
+            leadName={lead.name}
+            leadPhone={lead.phone}
+            origin={origin}
+            companyName={settings.companyName}
+            access={pa ? { token: pa.token, hasPin: !!pa.pin, lastViewedAt: pa.lastViewedAt?.toISOString() ?? null, revokedAt: pa.revokedAt?.toISOString() ?? null } : null}
+          />
+
+          <LeadCheckInsCard leadId={lead.id} />
 
           <Card className="p-5">
             <div className="flex items-center gap-3">

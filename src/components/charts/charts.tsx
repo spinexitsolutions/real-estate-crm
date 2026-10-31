@@ -143,7 +143,7 @@ export function DonutChart({
   const total = data.reduce((s, d) => s + d.value, 0);
   const filtered = data.filter((d) => d.value > 0);
   return (
-    <div className="flex flex-col items-center gap-5">
+    <div className="@container flex w-full flex-col items-center gap-5">
       <div style={{ height, width: height }} className="relative shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -170,7 +170,7 @@ export function DonutChart({
         </div>
       </div>
       {legend && (
-        <ul className="grid w-full min-w-0 grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+        <ul className="grid w-full min-w-0 grid-cols-1 gap-x-6 gap-y-2 @sm:grid-cols-2">
           {data.map((d, i) => (
             <li key={d.label} className="flex items-center gap-2 text-[13px]">
               <span className="size-2.5 shrink-0 rounded-sm" style={{ background: colors[i % colors.length] }} />

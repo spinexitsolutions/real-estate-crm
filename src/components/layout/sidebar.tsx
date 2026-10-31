@@ -39,7 +39,7 @@ export function SidebarContent({
           <p className="truncate text-[11px] text-slate-400">{company}</p>
         </div>
       </div>
-      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
         {NAV_SECTIONS.map((section) => {
           const items = section.items.filter((i) => !i.roles || i.roles.includes(role));
           if (!items.length) return null;
@@ -57,6 +57,8 @@ export function SidebarContent({
                       key={item.href}
                       href={item.href}
                       onClick={onNavigate}
+                      target={item.external ? "_blank" : undefined}
+                      rel={item.external ? "noreferrer" : undefined}
                       className={cn(
                         "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium transition",
                         active ? "bg-white/10 text-white" : "text-slate-400 hover:bg-white/5 hover:text-slate-100",
@@ -78,10 +80,6 @@ export function SidebarContent({
           );
         })}
       </nav>
-      <div className="m-3 rounded-xl border border-white/10 bg-white/5 p-4">
-        <p className="text-[13px] font-medium text-white">Close more deals</p>
-        <p className="mt-1 text-xs leading-relaxed text-slate-400">Clear today&apos;s follow-ups first. Hot leads convert 3x faster when contacted within an hour.</p>
-      </div>
     </div>
   );
 }
