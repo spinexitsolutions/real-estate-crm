@@ -10,8 +10,10 @@
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
-    "setup": "prisma db push && tsx prisma/seed.ts",
+    "db:reset": "prisma db push --force-reset && tsx scripts/secure-db.ts && tsx prisma/seed.ts",
+    "db:secure": "tsx scripts/secure-db.ts",
+    "setup": "prisma db push && tsx scripts/secure-db.ts && tsx prisma/seed.ts",
+    "setup:empty": "prisma db push && tsx scripts/secure-db.ts",
     "postinstall": "prisma generate",
     "vapid": "node scripts/generate-vapid.mjs",
     "test": "vitest run"
@@ -20,6 +22,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@date-fns/tz": "^1.5.0",
     "@prisma/client": "^6.19.3",
     "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^3.0.3",

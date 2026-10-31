@@ -1,4 +1,5 @@
 import { format, formatDistanceToNowStrict, isToday, isTomorrow, isYesterday } from "date-fns";
+import { inAppTz } from "./timezone";
 
 export function formatCurrency(value: number | null | undefined, currency = "INR") {
   if (value === null || value === undefined || Number.isNaN(value)) return "-";
@@ -42,16 +43,16 @@ export function formatNumber(n: number) {
 
 export function formatDate(d: Date | string | null | undefined) {
   if (!d) return "-";
-  return format(new Date(d), "dd MMM yyyy");
+  return format(inAppTz(d), "dd MMM yyyy");
 }
 
 export function formatDateTime(d: Date | string | null | undefined) {
   if (!d) return "-";
-  return format(new Date(d), "dd MMM yyyy, h:mm a");
+  return format(inAppTz(d), "dd MMM yyyy, h:mm a");
 }
 
 export function formatTime(d: Date | string) {
-  return format(new Date(d), "h:mm a");
+  return format(inAppTz(d), "h:mm a");
 }
 
 export function formatRelative(d: Date | string | null | undefined) {
@@ -60,7 +61,7 @@ export function formatRelative(d: Date | string | null | undefined) {
 }
 
 export function formatDueLabel(d: Date | string) {
-  const date = new Date(d);
+  const date = inAppTz(d);
   if (isToday(date)) return `Today, ${format(date, "h:mm a")}`;
   if (isTomorrow(date)) return `Tomorrow, ${format(date, "h:mm a")}`;
   if (isYesterday(date)) return `Yesterday, ${format(date, "h:mm a")}`;
@@ -70,12 +71,12 @@ export function formatDueLabel(d: Date | string) {
 /** Value for <input type="datetime-local"> */
 export function toDateTimeLocal(d: Date | string | null | undefined) {
   if (!d) return "";
-  return format(new Date(d), "yyyy-MM-dd'T'HH:mm");
+  return format(inAppTz(d), "yyyy-MM-dd'T'HH:mm");
 }
 
 export function toDateInput(d: Date | string | null | undefined) {
   if (!d) return "";
-  return format(new Date(d), "yyyy-MM-dd");
+  return format(inAppTz(d), "yyyy-MM-dd");
 }
 
 export function percent(n: number, d: number) {

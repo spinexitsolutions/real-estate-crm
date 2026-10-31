@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { addDays, addHours, setHours, setMinutes } from "date-fns";
+import { appNow } from "@/lib/timezone";
 import { Ban, Building2, CalendarClock, Clock, Ellipsis, Pencil, Phone, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Badge, OptionBadge } from "@/components/ui/badge";
@@ -57,7 +58,7 @@ export function FollowUpList({ items, users, properties, showLead = true }: { it
 }
 
 function rescheduleOptions() {
-  const now = new Date();
+  const now = appNow();
   return [
     { label: "In 1 hour", value: addHours(now, 1) },
     { label: "Tomorrow, 10 AM", value: setMinutes(setHours(addDays(now, 1), 10), 0) },

@@ -171,7 +171,7 @@ export function LeadsTable({
                   </td>
                   <td className="table-td">
                     {l.nextFollowUp ? (
-                      <span className={cn("text-[13px]", overdue ? "font-medium text-rose-600" : "text-slate-600")}>{formatRelative(l.nextFollowUp)}</span>
+                      <span suppressHydrationWarning className={cn("text-[13px]", overdue ? "font-medium text-rose-600" : "text-slate-600")}>{formatRelative(l.nextFollowUp)}</span>
                     ) : (
                       <span className="text-xs text-slate-400">None scheduled</span>
                     )}

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { addDays, setHours, setMinutes } from "date-fns";
+import { appNow, fromDateTimeLocal } from "@/lib/timezone";
 import { Check, CircleCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ export function CompleteFollowUpButton({ id, leadName, size = "sm" }: { id: stri
   const openModal = () => {
     setOutcome("");
     setScheduleNext(false);
-    setNextDue(toDateTimeLocal(setMinutes(setHours(addDays(new Date(), 2), 11), 0)));
+    setNextDue(toDateTimeLocal(setMinutes(setHours(addDays(appNow(), 2), 11), 0)));
     setOpen(true);
   };
 
@@ -34,7 +35,7 @@ export function CompleteFollowUpButton({ id, leadName, size = "sm" }: { id: stri
         return;
       }
       fd.set("scheduleNext", "true");
-      fd.set("nextDueAt", new Date(nextDue).toISOString());
+      fd.set("nextDueAt", fromDateTimeLocal(nextDue));
     }
     start(async () => {
       const res = await completeFollowUp(id, fd);

@@ -4,6 +4,8 @@ import { requireRole } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { PageHeader } from "@/components/ui/card";
 import { SettingsForms } from "./settings-forms";
+import { NotificationsStatusCard } from "@/components/settings/notifications-status-card";
+import { BackupCard } from "@/components/settings/backup-card";
 
 export const metadata = { title: "Settings" };
 
@@ -37,6 +39,10 @@ export default async function SettingsPage() {
           waDigestTemplate: s.waDigestTemplate ?? "",
         }}
       />
+      <div className="mt-6 grid gap-6">
+        <NotificationsStatusCard />
+        <BackupCard />
+      </div>
     </div>
   );
 }

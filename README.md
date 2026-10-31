@@ -1,62 +1,96 @@
 # EstateDesk CRM
 
-A real estate CRM built with Next.js to manage leads and follow-ups and close more deals.
+A real estate CRM built with Next.js and Supabase to manage leads and follow-ups and close more deals.
 
 ## Features
 
-- **Dashboard**: KPIs (active leads, follow-ups due, pipeline value, revenue closed), a 30-day lead trend, the pipeline funnel, today's agenda, hot leads going cold, lead sources, team target and leaderboard, and recent activity.
-- **Lead management**:
-  - List view with search, filters, sorting and pagination.
-  - Kanban pipeline with drag and drop.
-  - Bulk status, priority and assign changes, and bulk delete.
-  - CSV import with duplicate detection, and CSV export.
-  - Lead scoring, an activity timeline (notes, calls, meetings, emails) and a status stepper that records lost reasons.
-  - Shortlisted properties and automatic property matching.
-- **Property management**:
-  - Grid and table views with filters for type, sale or rent, status, city, BHK and price.
-  - Image gallery, amenities and owner details.
-  - Lists of interested and matching leads.
-  - Share on WhatsApp and copy details.
+- **Dashboard**: KPIs, a 30-day lead trend, the pipeline funnel, today's agenda, hot leads going cold, lead sources, team target and leaderboard, and recent activity.
+- **Leads**:
+  - List view and Kanban pipeline with drag and drop.
+  - Filters, bulk actions, CSV import with duplicate detection, and CSV export.
+  - Lead scoring, an activity timeline, lost reasons and automatic property matching.
+- **Properties**:
+  - Grid and table views with filters.
+  - Photo upload to Supabase Storage: drag and drop, automatic compression, reorder and set cover.
+  - Interested and matching leads, and share on WhatsApp.
 - **Follow-up reminders**:
-  - Overdue, Today, Upcoming and Completed tabs, plus a month calendar.
-  - Quick-schedule chips, completion with an outcome, and auto-scheduling of the next follow-up.
-  - Snooze and reschedule, and a notification bell with the count of due reminders.
-- **Deals**: a Kanban board by stage with a list view, expected commission, and win rate. When a deal is won, the lead and the property status update automatically.
-- **WhatsApp integration**:
-  - One-click click-to-chat with templates and variables (`{{name}}`, `{{property}}`, `{{price}}`, and others), with a live preview.
-  - Template manager, a broadcast to filtered leads, and a full message log.
-  - Optional WhatsApp Cloud API for sending directly from the CRM.
-- **Reports and analytics**:
-  - Date ranges and an agent filter.
-  - Source ROI, conversion funnel, revenue by month, agent leaderboard with targets, lost reasons, inventory, and follow-up discipline.
-  - CSV export and print to PDF.
-- **Team and roles**: Admin, Manager and Agent roles. Agents see only their own leads and deals. Each person can have a monthly target, and when someone is deactivated their leads can be reassigned.
-- **Lead capture webhook**: website and landing-page forms can post leads straight into the CRM. New leads are assigned round-robin, and a call reminder is created automatically.
+  - Overdue, Today, Upcoming and Completed tabs, plus a calendar.
+  - Completion with an outcome, and auto-scheduling of the next follow-up.
+  - In-app reminder pop-ups, browser and phone push notifications, and a daily email digest (plus an optional WhatsApp digest) for every agent.
+- **Deals**: a stage board, commission tracking and win rate. When a deal is won, the lead and property status update automatically.
+- **WhatsApp**:
+  - Click-to-chat with templates.
+  - Two-way inbox for customer replies via the Cloud API webhook.
+  - Approved Meta templates, handling of the 24-hour window, broadcast, and delivery and read ticks.
+- **Reports**: source ROI, conversion funnel, revenue, agent leaderboard with targets, lost reasons and inventory. CSV export and print to PDF.
+- **Team and roles**: Admin, Manager and Agent roles. Agents see only their own data. Monthly targets, and reassignment when someone is deactivated.
+- **Security**:
+  - Hashed passwords and signed sessions.
+  - Login rate limiting (5 failed attempts per email in 15 minutes).
+  - Forgot and reset password by email.
+  - Security headers.
+  - Row Level Security that locks Supabase's public REST API.
+- **Data**: a full JSON backup download for admins, and CSV exports.
 - **Extras**:
-  - Global search (Ctrl + K).
-  - EMI and affordability calculator.
-  - Profile and password change.
-  - Company settings and currency.
+  - Lead capture webhook for website forms.
+  - Global search (Ctrl + K) and EMI calculator.
+  - Installable as an app on phones (PWA).
+  - One business timezone for everyone (default India).
 
 ## Tech stack
 
 - Next.js 16 (App Router, Server Actions), React 19, TypeScript
-- Prisma ORM with SQLite by default (PostgreSQL ready)
+- Supabase: PostgreSQL database and Storage, with Prisma ORM
 - Tailwind CSS v4, lucide icons, Recharts
-- JWT session auth (jose) with bcrypt-hashed passwords
+- Web Push (VAPID), SMTP email (nodemailer), WhatsApp Cloud API
+- Vitest unit tests
 
-## Getting started
+## Setup with Supabase
 
+### 1. Create the Supabase project
+1. Create a project at https://supabase.com. Choose the **Mumbai (ap-south-1)** region for Indian users.
+2. Go to **Project Settings > Database > Connection string** and copy the connection strings:
+   - **Transaction pooler** (port 6543) goes in `DATABASE_URL`. Add `?pgbouncer=true&connection_limit=1` to the end.
+   - **Session pooler / direct** (port 5432) goes in `DIRECT_URL`.
+3. Go to **Project Settings > API** and copy:
+   - the Project URL into `SUPABASE_URL`
+   - the `service_role` key into `SUPABASE_SERVICE_ROLE_KEY` (secret, server only)
+
+### 2. Configure and install
 ```bash
 npm install
-cp .env.example .env      # then set AUTH_SECRET
-npm run setup             # creates the database and loads demo data
+```
+```bash
+cp .env.example .env
+```
+Fill in `.env`. At minimum you need the database URLs, the Supabase keys, `AUTH_SECRET` and `APP_URL`.
+
+### 3. Create the tables
+To load demo data:
+```bash
+npm run setup
+```
+To start with an empty CRM instead:
+```bash
+npm run setup:empty
+```
+Both commands create the tables and enable Row Level Security on every table. RLS blocks Supabase's public REST API, while the app connects as the database owner and keeps full access. After any later schema change, run `npm run db:push`, then `npm run db:secure`.
+
+The storage bucket `property-images` is created automatically on the first photo upload.
+
+### 4. Run
+```bash
 npm run dev
 ```
+For production:
+```bash
+npm run build
+```
+```bash
+npm start
+```
 
-Open http://localhost:3000.
-
-Demo logins (password `admin123`):
+Demo logins (after `npm run setup`), all with password `admin123`:
 
 | Role    | Email                   |
 |---------|-------------------------|
@@ -64,29 +98,57 @@ Demo logins (password `admin123`):
 | Manager | manager@estatedesk.com  |
 | Agent   | rohan@estatedesk.com    |
 
-To start with an empty CRM, run `npx prisma db push --force-reset` without seeding. Then open `/register` to create the first admin account.
+With an empty database, open `/register` to create the first admin account.
 
-## Production
+## Deploying to Vercel
 
-```bash
-npm run build
-npm start
-```
+1. Import the repository in Vercel and add every variable from `.env.example`.
+2. Deploy. `vercel.json` already schedules the daily digest at 8 AM IST.
+3. **Follow-up reminders every 5 minutes:** Vercel Hobby allows only daily crons, so use Supabase instead. Open the Supabase **SQL Editor** and run `docs/SUPABASE_CRON.sql` after putting your app URL and `CRON_SECRET` into it.
 
-For PostgreSQL, set `provider = "postgresql"` in `prisma/schema.prisma`, point `DATABASE_URL` at your database, and run `npx prisma db push`.
-Always set a long random `AUTH_SECRET` in production.
+## Notifications
 
-## WhatsApp Cloud API (optional)
+| Channel | Setup |
+|---------|-------|
+| In-app pop-ups | None needed. They work whenever the CRM is open. |
+| Push (browser and phone) | Run `npm run vapid` and set `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Each user enables push from the bell icon or their Profile. |
+| Daily email digest | Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`. Gmail (app password), Zoho, Brevo, Resend or SES all work. This also enables "Forgot password". |
+| WhatsApp digest to agents | Create an approved Meta template with 3 variables (agent name, due today, overdue) and enter its name in Settings. |
 
-Without the API, every message opens WhatsApp (web or app) with the text pre-filled. This works with no setup.
-To send directly from the CRM, go to **Settings > WhatsApp Cloud API**, turn it on, and enter your Phone Number ID and permanent access token from Meta for Developers.
+**Settings > Notifications** shows what is configured and can send a test notification.
+
+## WhatsApp
+
+- **Without the API:** every message opens WhatsApp with the text pre-filled. No setup is needed.
+- **With the Cloud API:**
+  1. Go to **Settings > WhatsApp Cloud API** and enter the Phone Number ID and access token.
+  2. In your Meta app, set the webhook to `https://your-domain/api/webhooks/whatsapp` with the verify token shown in Settings, and subscribe to `messages`.
+  3. Replies then appear in **WhatsApp > Inbox**.
+- **Approved templates:** WhatsApp lets you send free text only within 24 hours of the customer's last message. For anything else, including broadcasts, add the approved Meta template name and parameter order to the template in **WhatsApp > Templates**.
 
 ## Lead capture webhook
 
-The URL is in **Settings > Lead capture webhook**:
+Copy the URL from **Settings > Lead capture webhook**:
 
 ```bash
 curl -X POST "https://your-domain.com/api/webhooks/lead?key=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name":"Rahul Verma","phone":"9876543210","source":"WEBSITE","message":"Looking for 2 BHK"}'
+```
+
+New leads are assigned to the agent with the fewest open leads, and a call reminder is created for 15 minutes later.
+
+## Backups
+
+- Supabase backs up the database daily on paid plans. Enable Point-in-Time Recovery for minute-level restore.
+- Admins can download a full JSON backup at any time from **Settings > Data & backup**.
+
+## Timezone
+
+All dates use `APP_TIMEZONE` (default `Asia/Kolkata`), whatever the server or browser timezone is.
+
+## Tests
+
+```bash
+npm test
 ```

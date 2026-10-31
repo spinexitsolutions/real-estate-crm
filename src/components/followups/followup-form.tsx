@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { addDays, addHours, addWeeks, setHours, setMinutes, startOfHour } from "date-fns";
+import { appNow, fromDateTimeLocal } from "@/lib/timezone";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -34,7 +35,7 @@ const DEFAULT_TITLES: Record<string, string> = {
 };
 
 function quickTimes() {
-  const now = new Date();
+  const now = appNow();
   const tomorrow10 = setMinutes(setHours(addDays(now, 1), 10), 0);
   return [
     { label: "In 1 hour", value: startOfHour(addHours(now, 2)) },
@@ -86,7 +87,7 @@ export function FollowUpFormModal({
       toast.error("Please choose a due date and time.");
       return;
     }
-    fd.set("dueAt", new Date(due).toISOString());
+    fd.set("dueAt", fromDateTimeLocal(due));
     fd.set("type", type);
     fd.set("title", title);
     if (fixedLead) fd.set("leadId", fixedLead);

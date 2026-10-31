@@ -133,7 +133,7 @@ export function LeadsBoard({ leads: initial, currency }: { leads: BoardLead[]; c
                           {l.nextFollowUp && (
                             <p className={cn("flex items-center gap-1", overdue ? "font-medium text-rose-600" : "")}>
                               <CalendarClock className="size-3.5 shrink-0" />
-                              {formatRelative(l.nextFollowUp)}
+                              <span suppressHydrationWarning>{formatRelative(l.nextFollowUp)}</span>
                             </p>
                           )}
                         </div>

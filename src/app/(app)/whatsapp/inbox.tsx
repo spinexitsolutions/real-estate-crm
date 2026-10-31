@@ -13,6 +13,7 @@ import { WhatsAppIcon } from "@/components/ui/icons";
 import { isWindowOpen, windowRemainingLabel } from "@/lib/whatsapp-window";
 import { cn, fillTemplate, waLink } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
+import { inAppTz } from "@/lib/timezone";
 
 export type Conversation = {
   leadId: string;
@@ -40,14 +41,14 @@ export type ThreadLead = { id: string; name: string; phone: string; lastInboundA
 type Template = { id: string; name: string; body: string; metaName: string | null };
 
 function shortTime(iso: string) {
-  const d = new Date(iso);
+  const d = inAppTz(iso);
   if (isToday(d)) return format(d, "h:mm a");
   if (isYesterday(d)) return "Yesterday";
   return format(d, "dd MMM");
 }
 
 function dayLabel(iso: string) {
-  const d = new Date(iso);
+  const d = inAppTz(iso);
   if (isToday(d)) return "Today";
   if (isYesterday(d)) return "Yesterday";
   return format(d, "d MMMM yyyy");
@@ -261,7 +262,7 @@ function Thread({
             title="WhatsApp allows free text only within 24 hours of the customer's last message"
           >
             <Clock className="size-3.5" />
-            {windowOpen ? `Reply window open - ${windowRemainingLabel(lead.lastInboundAt)}` : "24h window closed"}
+            <span suppressHydrationWarning>{windowOpen ? `Reply window open - ${windowRemainingLabel(lead.lastInboundAt)}` : "24h window closed"}</span>
           </span>
         )}
       </header>
@@ -294,7 +295,7 @@ function Thread({
                   <p className="mt-1 flex items-center justify-end gap-1 text-[10.5px] text-slate-500">
                     {out && m.channel === "LINK" && <span title="Sent from the WhatsApp app via click-to-chat">via app -</span>}
                     {out && m.userName && <span>{m.userName.split(" ")[0]} -</span>}
-                    {format(new Date(m.createdAt), "h:mm a")}
+                    {format(inAppTz(m.createdAt), "h:mm a")}
                     {out && m.channel === "API" && <StatusTicks status={m.status} />}
                   </p>
                   {m.status === "FAILED" && m.error && <p className="mt-1 text-[11px] text-rose-600">{m.error}</p>}

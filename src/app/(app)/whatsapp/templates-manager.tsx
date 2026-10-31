@@ -158,7 +158,7 @@ export function TemplatesManager({ templates, canDelete }: { templates: Template
                 <HighlightedBody body={t.body} className="line-clamp-6" />
               </div>
               <p className="mt-3 truncate text-xs text-slate-400">
-                Updated {formatRelative(t.updatedAt)}
+                <span suppressHydrationWarning>Updated {formatRelative(t.updatedAt)}</span>
                 {t.metaName && <span className="font-mono"> - {t.metaName}</span>}
               </p>
             </Card>
