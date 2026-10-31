@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   Building,
@@ -162,7 +163,7 @@ function randomToken() {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function SettingsForms({ settings: s, origin }: { settings: S; origin: string }) {
+export function SettingsForms({ settings: s, origin, waApiLocked }: { settings: S; origin: string; waApiLocked?: string | null }) {
   const [waEnabled, setWaEnabled] = useState(s.waApiEnabled);
   const [verifyToken, setVerifyToken] = useState(s.waVerifyToken);
   const [key, setKey] = useState(s.leadWebhookKey);
@@ -268,6 +269,16 @@ export function SettingsForms({ settings: s, origin }: { settings: S; origin: st
           )
         }
       >
+        {waApiLocked ? (
+          <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center">
+            <p className="flex-1 text-sm text-slate-600">
+              Sending through the WhatsApp Cloud API, the two-way inbox and broadcasts are available on {waApiLocked}. Click-to-chat links keep working on every plan.
+            </p>
+            <Link href="/billing" className="inline-flex h-8 shrink-0 items-center rounded-lg border border-brand-200 px-3 text-[13px] font-medium text-brand-700 hover:bg-brand-50">
+              Upgrade
+            </Link>
+          </div>
+        ) : (
         <SectionForm action={saveWhatsApp}>
           <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-slate-200 p-4">
             <span>
@@ -336,6 +347,7 @@ export function SettingsForms({ settings: s, origin }: { settings: S; origin: st
             </a>
           </div>
         </SectionForm>
+        )}
       </Section>
 
       <Section icon={Webhook} title="Lead capture webhook" description="Send enquiries from your website, landing pages, Facebook lead ads (via Zapier / Make) or portals straight into the CRM as new leads.">

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireUser, isManager, type CurrentUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import type { ActionResult } from "@/lib/action";
+import { guardWritable } from "@/lib/plans";
 import { optNum, optStr, str } from "@/lib/utils";
 import { DEAL_STAGES, labelOf } from "@/lib/constants";
 
@@ -59,6 +60,8 @@ async function applyStageEffects(dealId: string, stage: string, userId: string) 
 
 export async function createDeal(fd: FormData): Promise<ActionResult<{ id: string }>> {
   const user = await requireUser();
+  const locked = await guardWritable();
+  if (locked) return { error: locked };
   const data = readDeal(fd);
   if (!data.leadId) return { error: "Please select a lead." };
   if (!data.title) return { error: "Deal title is required." };

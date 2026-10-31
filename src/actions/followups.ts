@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireUser, type CurrentUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import type { ActionResult } from "@/lib/action";
+import { guardWritable } from "@/lib/plans";
 import { labelOf, FOLLOWUP_TYPES } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
 import { optStr, str } from "@/lib/utils";
@@ -31,6 +32,8 @@ function parseDue(v: string) {
 
 export async function createFollowUp(fd: FormData): Promise<ActionResult> {
   const user = await requireUser();
+  const locked = await guardWritable();
+  if (locked) return { error: locked };
   const leadId = str(fd, "leadId");
   const title = str(fd, "title");
   const dueAt = parseDue(str(fd, "dueAt"));
@@ -101,6 +104,8 @@ export async function updateFollowUp(id: string, fd: FormData): Promise<ActionRe
 
 export async function completeFollowUp(id: string, fd: FormData): Promise<ActionResult> {
   const user = await requireUser();
+  const locked = await guardWritable();
+  if (locked) return { error: locked };
   const f = await getAccessible(user, id);
   if (!f) return { error: "Follow-up not found or you do not have access." };
   const outcome = optStr(fd, "outcome");

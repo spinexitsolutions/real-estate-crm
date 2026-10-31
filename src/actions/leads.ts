@@ -7,6 +7,7 @@ import { isManager, requireUser, type CurrentUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import type { ActionResult } from "@/lib/action";
+import { assertWithinLimit, capacityLeft, guardWritable } from "@/lib/plans";
 import { labelOf, LEAD_SOURCES, LEAD_STATUSES } from "@/lib/constants";
 import { optInt, optNum, optStr, parseCsv, str } from "@/lib/utils";
 
@@ -51,6 +52,10 @@ function validate(d: ReturnType<typeof leadData>) {
 
 export async function createLead(fd: FormData): Promise<ActionResult<{ id: string }>> {
   const user = await requireUser();
+  const locked = await guardWritable();
+  if (locked) return { error: locked };
+  const overLimit = await assertWithinLimit("leads");
+  if (overLimit) return { error: overLimit };
   const data = leadData(fd);
   const err = validate(data);
   if (err) return { error: err };
@@ -77,6 +82,8 @@ export async function createLead(fd: FormData): Promise<ActionResult<{ id: strin
 
 export async function updateLead(id: string, fd: FormData): Promise<ActionResult> {
   const user = await requireUser();
+  const locked = await guardWritable();
+  if (locked) return { error: locked };
   const lead = await getLeadForUser(id, user);
   if (!lead) return { error: "Lead not found or access denied." };
   const data = leadData(fd);
@@ -227,8 +234,12 @@ function matchOption(list: { value: string; label: string }[], raw: string, fall
   return list.find((o) => o.value.toLowerCase() === v || o.label.toLowerCase() === v)?.value ?? fallback;
 }
 
-export async function importLeads(csv: string, assignToId: string | null): Promise<ActionResult<{ created: number; skipped: number }>> {
+export async function importLeads(csv: string, assignToId: string | null): Promise<ActionResult<{ created: number; skipped: number; overLimit: number; limitMessage: string | null }>> {
   const user = await requireUser();
+  const locked = await guardWritable();
+  if (locked) return { error: locked };
+  const capacity = await capacityLeft("leads");
+  let overLimit = 0;
   const rows = parseCsv(csv);
   if (rows.length < 2) return { error: "The file has no data rows." };
   const headers = rows[0].map((h) => HEADER_MAP[h.trim().toLowerCase()] ?? null);
@@ -246,6 +257,10 @@ export async function importLeads(csv: string, assignToId: string | null): Promi
     const digits = (rec.phone || "").replace(/\D/g, "").slice(-10);
     if (!rec.name || digits.length < 7 || existing.has(digits)) {
       skipped++;
+      continue;
+    }
+    if (created >= capacity) {
+      overLimit++;
       continue;
     }
     existing.add(digits);
@@ -280,5 +295,6 @@ export async function importLeads(csv: string, assignToId: string | null): Promi
     await notifyUser(owner, { title: `${created} imported lead${created > 1 ? "s" : ""} assigned to you`, body: `Imported by ${user.name}`, url: "/leads", tag: "import-assign" });
   }
   revalidatePath("/", "layout");
-  return { ok: true, data: { created, skipped } };
+  const limitMessage = overLimit ? ((await assertWithinLimit("leads")) ?? null) : null;
+  return { ok: true, data: { created, skipped, overLimit, limitMessage } };
 }

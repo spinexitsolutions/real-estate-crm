@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { requireFeature } from "@/lib/plans";
+import { UpgradeRequired } from "@/components/billing/upgrade-required";
 import { addMonths, eachDayOfInterval, endOfMonth, format, getDay, parse, startOfMonth, subMonths } from "date-fns";
 import { Building2, CalendarDays, ChevronLeft, ChevronRight, Clock, Download, MapPin, MapPinCheck, UserCheck } from "lucide-react";
 import { db } from "@/lib/db";
@@ -39,6 +41,8 @@ const t = (d: Date) => format(inAppTz(d), "h:mm a");
 export default async function AttendancePage({ searchParams }: { searchParams: Promise<{ date?: string; month?: string }> }) {
   const sp = await searchParams;
   const user = await requireUser();
+  const lock = await requireFeature("attendance");
+  if (lock) return <UpgradeRequired {...lock} />;
   const manager = isManager(user);
   const now = new Date();
   const todayKey = format(inAppTz(now), "yyyy-MM-dd");

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { requireFeature } from "@/lib/plans";
+import { UpgradeRequired } from "@/components/billing/upgrade-required";
 import type { Prisma } from "@prisma/client";
 import { addDays, endOfDay, startOfDay } from "date-fns";
 import { CircleAlert, IndianRupee, Plus, ReceiptText, Wallet, Landmark } from "lucide-react";
@@ -24,6 +26,8 @@ const PAGE_SIZE = 20;
 export default async function BookingsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const user = await requireUser();
+  const lock = await requireFeature("bookings");
+  if (lock) return <UpgradeRequired {...lock} />;
   const settings = await getSettings();
   const cur = settings.currency;
   const manager = isManager(user);

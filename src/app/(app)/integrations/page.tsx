@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { requireFeature } from "@/lib/plans";
+import { UpgradeRequired } from "@/components/billing/upgrade-required";
 import { headers } from "next/headers";
 import { subDays } from "date-fns";
 import type { Prisma } from "@prisma/client";
@@ -27,6 +29,8 @@ const STATUS_BADGE: Record<string, string> = {
 
 export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireRole(["ADMIN", "MANAGER"]);
+  const lock = await requireFeature("portal_integrations");
+  if (lock) return <UpgradeRequired {...lock} />;
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const h = await headers();

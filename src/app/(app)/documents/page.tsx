@@ -1,4 +1,6 @@
 import type { Prisma } from "@prisma/client";
+import { requireFeature } from "@/lib/plans";
+import { UpgradeRequired } from "@/components/billing/upgrade-required";
 import { FolderOpen, FileText, Share2, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -16,6 +18,8 @@ const PAGE_SIZE = 30;
 export default async function DocumentsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const user = await requireUser();
+  const lock = await requireFeature("documents");
+  if (lock) return <UpgradeRequired {...lock} />;
   const page = Math.max(1, Number(sp.page) || 1);
   const scope = documentScope(user);
 

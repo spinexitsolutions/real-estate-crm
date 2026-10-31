@@ -8,6 +8,7 @@ import { logActivity } from "@/lib/activity";
 import { sendTemplateViaCloudApi, sendViaCloudApi } from "@/lib/whatsapp";
 import { isWindowOpen, parseMetaParams } from "@/lib/whatsapp-window";
 import type { ActionResult } from "@/lib/action";
+import { orgHasFeature } from "@/lib/plans";
 import { fillTemplate, normalizePhone, str, waLink } from "@/lib/utils";
 
 export async function getWhatsAppContext(leadId?: string) {
@@ -22,7 +23,7 @@ export async function getWhatsAppContext(leadId?: string) {
     lastInboundAt: lead?.lastInboundAt?.toISOString() ?? null,
     company: settings.companyName,
     agentName: user.name,
-    apiEnabled: Boolean(settings.waApiEnabled && settings.waPhoneNumberId && settings.waAccessToken),
+    apiEnabled: Boolean(settings.waApiEnabled && settings.waPhoneNumberId && settings.waAccessToken) && (await orgHasFeature("whatsapp_api")),
     countryCode: settings.defaultCountryCode,
   };
 }
@@ -66,6 +67,7 @@ export async function sendWhatsApp({
   let waMessageId: string | null = null;
 
   if (channel === "API") {
+    if (!(await orgHasFeature("whatsapp_api"))) return { error: "Sending through the WhatsApp API is not included in your plan. Use Open in WhatsApp, or upgrade your plan." };
     if (!settings.waApiEnabled || !settings.waPhoneNumberId || !settings.waAccessToken) {
       return { error: "WhatsApp API is not configured. Set it up in Settings." };
     }
@@ -232,6 +234,7 @@ export async function broadcast({
     return { ok: true, data: { sent: 0, failed: 0, links } };
   }
 
+  if (!(await orgHasFeature("whatsapp_api"))) return { error: "Broadcasting through the WhatsApp API is not included in your plan. Use click-to-send links, or upgrade your plan." };
   if (!settings.waApiEnabled || !settings.waPhoneNumberId || !settings.waAccessToken) {
     return { error: "WhatsApp API is not configured. Set it up in Settings, or use click-to-send links." };
   }

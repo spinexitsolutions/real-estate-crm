@@ -11,6 +11,8 @@ import { WebsiteCard } from "@/components/settings/website-card";
 import { TelephonyCard } from "@/components/settings/telephony-card";
 import { PaymentSettingsCard } from "@/components/settings/payment-settings-card";
 import { db, rawDb } from "@/lib/db";
+import { requireFeature } from "@/lib/plans";
+import { LockedCard } from "@/components/billing/upgrade-required";
 
 export const metadata = { title: "Settings" };
 
@@ -22,6 +24,7 @@ export default async function SettingsPage() {
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
   const origin = `${proto}://${host}`;
   const org = await rawDb.organization.findUniqueOrThrow({ where: { id: s.organizationId }, select: { slug: true } });
+  const [waLock, siteLock, callLock] = await Promise.all([requireFeature("whatsapp_api"), requireFeature("website"), requireFeature("click_to_call")]);
   const publishedCount = await db.property.count({ where: { published: true, status: { in: ["AVAILABLE", "RESERVED"] } } });
 
   return (
@@ -29,6 +32,7 @@ export default async function SettingsPage() {
       <PageHeader title="Settings" description="Manage your workspace, preferences and integrations" icon={Settings} />
       <SettingsForms
         origin={origin}
+        waApiLocked={waLock ? (waLock.upgradePlan ? `the ${waLock.upgradePlan} plan and above` : "higher plans") : null}
         settings={{
           companyName: s.companyName,
           companyPhone: s.companyPhone ?? "",
@@ -49,8 +53,15 @@ export default async function SettingsPage() {
       />
       <div className="mt-6 grid gap-6">
         <BrandingCard logoUrl={s.logoUrl} brandColor={s.brandColor} reraNumber={s.reraNumber} />
+        {siteLock ? (
+          <LockedCard title="Public website" featureLabel={siteLock.featureLabel} upgradePlan={siteLock.upgradePlan} />
+        ) : (
         <WebsiteCard slug={org.slug} origin={origin} enabled={s.websiteEnabled} tagline={s.websiteTagline} about={s.websiteAbout} publishedCount={publishedCount} />
+        )}
         <PaymentSettingsCard receiptPrefix={s.receiptPrefix} nextReceiptNo={s.nextReceiptNo} waPaymentTemplate={s.waPaymentTemplate} />
+        {callLock ? (
+          <LockedCard title="Click-to-call (Exotel / Knowlarity)" featureLabel={callLock.featureLabel} upgradePlan={callLock.upgradePlan} />
+        ) : (
         <TelephonyCard
           origin={origin}
           settings={{
@@ -67,6 +78,7 @@ export default async function SettingsPage() {
             telephonyWebhookKey: s.telephonyWebhookKey,
           }}
         />
+        )}
         <NotificationsStatusCard />
         <BackupCard />
       </div>

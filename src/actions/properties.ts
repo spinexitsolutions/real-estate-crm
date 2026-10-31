@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requireUser, isManager } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import type { ActionResult } from "@/lib/action";
+import { assertWithinLimit, guardWritable } from "@/lib/plans";
 import { optInt, optNum, optStr, parseImages, str } from "@/lib/utils";
 import { labelOf, PROPERTY_STATUSES } from "@/lib/constants";
 import { deleteImages } from "@/lib/storage";
@@ -62,6 +63,10 @@ async function nextCode() {
 
 export async function createProperty(fd: FormData): Promise<ActionResult<{ id: string }>> {
   const user = await requireUser();
+  const locked = await guardWritable();
+  if (locked) return { error: locked };
+  const overLimit = await assertWithinLimit("properties");
+  if (overLimit) return { error: overLimit };
   const data = readProperty(fd);
   if (!data.title) return { error: "Title is required." };
   if (!data.city) return { error: "City is required." };

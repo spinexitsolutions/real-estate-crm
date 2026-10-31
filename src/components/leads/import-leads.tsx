@@ -53,6 +53,7 @@ export function ImportLeadsButton({ users, canAssign }: { users: { id: string; n
                   const res = await importLeads(text, assignTo || null);
                   if (res.error) return void toast.error(res.error);
                   toast.success(`Imported ${res.data?.created} lead(s)${res.data?.skipped ? `, skipped ${res.data.skipped} duplicate/invalid` : ""}`);
+                  if (res.data?.overLimit) toast.warning(`${res.data.overLimit} lead(s) were not imported. ${res.data.limitMessage ?? "Your plan's lead limit was reached."}`, { duration: 10000 });
                   setOpen(false);
                   setText("");
                   setFileName("");

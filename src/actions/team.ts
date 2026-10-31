@@ -3,10 +3,11 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, rawDb } from "@/lib/db";
 import { OPEN_LEAD_STATUSES, ROLES } from "@/lib/constants";
 import { optNum, optStr, str } from "@/lib/utils";
 import type { ActionResult } from "@/lib/action";
+import { assertWithinLimit, guardWritable } from "@/lib/plans";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
@@ -17,6 +18,8 @@ async function requireAdmin() {
 export async function saveMember(id: string | null, fd: FormData): Promise<ActionResult> {
   const admin = await requireAdmin();
   if (!admin) return { error: "Only administrators can manage team members." };
+  const locked = await guardWritable();
+  if (locked) return { error: locked };
 
   const name = str(fd, "name");
   const email = str(fd, "email").toLowerCase();
@@ -30,8 +33,11 @@ export async function saveMember(id: string | null, fd: FormData): Promise<Actio
   if (!ROLES.some((r) => r.value === role)) return { error: "Invalid role." };
   if (monthlyTarget < 0) return { error: "Target cannot be negative." };
 
-  const clash = await db.user.findUnique({ where: { email } });
-  if (clash && clash.id !== id) return { error: "Another member already uses this email." };
+  // Emails are unique across every company on the platform, so check globally.
+  const clash = await rawDb.user.findUnique({ where: { email }, select: { id: true, organizationId: true } });
+  if (clash && clash.id !== id) {
+    return { error: clash.organizationId === admin.organizationId ? "Another member already uses this email." : "This email is already registered with another account. Use a different email." };
+  }
 
   if (id) {
     const existing = await db.user.findUnique({ where: { id } });
@@ -47,6 +53,8 @@ export async function saveMember(id: string | null, fd: FormData): Promise<Actio
     });
   } else {
     if (password.length < 8) return { error: "Password must be at least 8 characters." };
+    const limit = await assertWithinLimit("users");
+    if (limit) return { error: limit };
     await db.user.create({ data: { name, email, phone, role, monthlyTarget, password: await bcrypt.hash(password, 10) } });
   }
   revalidatePath("/", "layout");
@@ -60,6 +68,10 @@ export async function setMemberActive(id: string, active: boolean, reassignToId?
 
   const member = await db.user.findUnique({ where: { id } });
   if (!member) return { error: "Member not found." };
+  if (active && !member.active) {
+    const limit = await assertWithinLimit("users");
+    if (limit) return { error: limit };
+  }
 
   if (!active && member.role === "ADMIN") {
     const admins = await db.user.count({ where: { role: "ADMIN", active: true } });

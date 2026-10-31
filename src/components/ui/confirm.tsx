@@ -5,6 +5,7 @@ import { TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./button";
 import { Modal } from "./modal";
+import { getGlobalReadOnlyReason } from "@/components/billing/read-only-context";
 
 type ConfirmProps = {
   title: string;
@@ -53,7 +54,8 @@ export function ConfirmDialog({ open, onClose, title, description, confirmLabel 
                   onClose();
                 } catch (e) {
                   if (isRedirect(e)) throw e;
-                  toast.error("Something went wrong. Please try again.");
+                  // Server errors are masked in production; show the real reason when the account is read-only.
+                  toast.error(getGlobalReadOnlyReason() ?? "Something went wrong. Please try again.");
                 }
               })
             }

@@ -3,10 +3,19 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
+import { getOrgPlan, readOnlyReasonFor } from "@/lib/plans";
+import { planFeatures } from "@/lib/billing-core";
+import { orgAccess } from "@/lib/tenancy";
+import { StatusBanner } from "@/components/billing/status-banner";
+import { SuspendedScreen } from "@/components/billing/suspended-screen";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const settings = await getSettings();
+  const org = await getOrgPlan(user.organizationId);
+  const access = org ? orgAccess(org) : null;
+  const readOnlyReason = readOnlyReasonFor(org);
+  const isAdmin = user.role === "ADMIN";
   const now = new Date();
   const where = {
     status: "PENDING",
@@ -32,6 +41,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       user={{ name: user.name, email: user.email, role: user.role }}
       company={settings.companyName}
       logoUrl={settings.logoUrl}
+      features={planFeatures(org?.plan)}
+      readOnlyReason={readOnlyReason}
+      statusBanner={access ? <StatusBanner state={access.state} daysLeft={access.daysLeft} readOnly={access.readOnly} isAdmin={isAdmin} /> : null}
+      suspendedScreen={
+        access?.state === "suspended" ? <SuspendedScreen supportEmail={process.env.PLATFORM_SUPPORT_EMAIL} supportPhone={process.env.PLATFORM_SUPPORT_PHONE} /> : undefined
+      }
       followupCount={count}
       whatsappUnread={waUnread._sum.unreadMessages ?? 0}
       notifications={due.map((f) => ({

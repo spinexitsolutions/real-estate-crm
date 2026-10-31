@@ -15,6 +15,7 @@ import {
   Globe,
   UserCheck,
   PlugZap,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/ui/icons";
@@ -27,6 +28,8 @@ export type NavItem = {
   badgeKey?: "followups" | "whatsapp";
   match?: (path: string, search: string) => boolean;
   external?: boolean;
+  /** Plan feature key required to show this item (see FEATURES in lib/billing-core). */
+  feature?: string;
 };
 
 export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
@@ -41,9 +44,9 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: "/leads?view=board", label: "Pipeline", icon: Kanban, match: (p, s) => p === "/leads" && s.includes("view=board") },
       { href: "/follow-ups", label: "Follow-ups", icon: CalendarClock, badgeKey: "followups" },
       { href: "/deals", label: "Deals", icon: Handshake },
-      { href: "/bookings", label: "Bookings & Payments", icon: ReceiptText },
+      { href: "/bookings", label: "Bookings & Payments", icon: ReceiptText, feature: "bookings" },
       { href: "/properties", label: "Properties", icon: Building2 },
-      { href: "/documents", label: "Documents", icon: FolderOpen },
+      { href: "/documents", label: "Documents", icon: FolderOpen, feature: "documents" },
     ],
   },
   {
@@ -51,7 +54,7 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/whatsapp", label: "WhatsApp", icon: WhatsAppIcon, badgeKey: "whatsapp" },
       { href: "/calls", label: "Calls", icon: PhoneCall },
-      { href: "/site", label: "Public Website", icon: Globe, external: true },
+      { href: "/site", label: "Public Website", icon: Globe, external: true, feature: "website" },
     ],
   },
   {
@@ -64,9 +67,10 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
   {
     title: "Workspace",
     items: [
-      { href: "/attendance", label: "Attendance", icon: UserCheck },
+      { href: "/attendance", label: "Attendance", icon: UserCheck, feature: "attendance" },
       { href: "/team", label: "Team", icon: UserCog, roles: ["ADMIN", "MANAGER"] },
-      { href: "/integrations", label: "Integrations", icon: PlugZap, roles: ["ADMIN", "MANAGER"] },
+      { href: "/integrations", label: "Integrations", icon: PlugZap, roles: ["ADMIN", "MANAGER"], feature: "portal_integrations" },
+      { href: "/billing", label: "Plan & Billing", icon: CreditCard, roles: ["ADMIN", "MANAGER"] },
       { href: "/settings", label: "Settings", icon: Settings, roles: ["ADMIN"] },
     ],
   },

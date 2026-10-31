@@ -9,6 +9,7 @@ import { db, rawDb } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import type { ActionResult } from "@/lib/action";
+import { orgHasFeature } from "@/lib/plans";
 import { PORTAL_COOKIE_MAX_AGE, portalCookieName, portalCookieValue } from "@/lib/portal-session";
 
 async function canAccessLead(leadId: string) {
@@ -22,6 +23,7 @@ async function canAccessLead(leadId: string) {
 export async function createOrRotatePortalAccess(leadId: string, pin?: string): Promise<ActionResult<{ token: string }>> {
   const user = await canAccessLead(leadId);
   if (!user) return { error: "Lead not found or access denied." };
+  if (!(await orgHasFeature("customer_portal"))) return { error: "The customer portal is not included in your plan. Upgrade to share portal links." };
   const cleanPin = (pin ?? "").trim();
   if (cleanPin && !/^\d{4,6}$/.test(cleanPin)) return { error: "PIN must be 4 to 6 digits." };
   const token = randomBytes(24).toString("base64url");

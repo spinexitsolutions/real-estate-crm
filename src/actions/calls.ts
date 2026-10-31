@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { isManager, requireUser, type CurrentUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import type { ActionResult } from "@/lib/action";
+import { orgHasFeature } from "@/lib/plans";
 import { startClickToCall, telephonyStatus } from "@/lib/telephony";
 import { CALL_STATUSES, labelOf } from "@/lib/constants";
 
@@ -33,6 +34,7 @@ function fmtDuration(sec: number) {
 
 export async function clickToCall(leadId: string): Promise<ActionResult<{ provider: string }>> {
   const user = await requireUser();
+  if (!(await orgHasFeature("click_to_call"))) return { error: "Click-to-call is not included in your plan. Call from your phone and log the call, or upgrade your plan." };
   const lead = await leadForUser(leadId, user);
   if (!lead) return { error: "Lead not found or access denied." };
   if (!user.phone || user.phone.replace(/\D/g, "").length < 10) {

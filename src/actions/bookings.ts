@@ -7,6 +7,7 @@ import { db, requireOrgId } from "@/lib/db";
 import { isManager, requireUser, type CurrentUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import type { ActionResult } from "@/lib/action";
+import { guardWritable } from "@/lib/plans";
 import { formatCurrency } from "@/lib/format";
 import { fromDateTimeLocal, inAppTz } from "@/lib/timezone";
 import { labelOf, PAYMENT_METHODS } from "@/lib/constants";
@@ -333,6 +334,8 @@ async function paymentForUser(id: string, user: CurrentUser) {
 /** Records one payment against an installment. Every payment gets its own receipt number. */
 export async function recordPayment(installmentId: string, fd: FormData): Promise<ActionResult<{ receiptNo: string; paymentId: string }>> {
   const user = await requireUser();
+  const locked = await guardWritable();
+  if (locked) return { error: locked };
   const i = await installmentForUser(installmentId, user);
   if (!i) return { error: "Installment not found or access denied." };
   if (i.booking.status === "CANCELLED") return { error: "This booking is cancelled." };

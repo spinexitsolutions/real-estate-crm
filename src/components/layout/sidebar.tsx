@@ -13,6 +13,7 @@ export function SidebarContent({
   followupCount,
   whatsappUnread = 0,
   logoUrl,
+  features,
   onNavigate,
 }: {
   role: string;
@@ -20,6 +21,7 @@ export function SidebarContent({
   followupCount: number;
   whatsappUnread?: number;
   logoUrl?: string | null;
+  features?: string[];
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -41,7 +43,7 @@ export function SidebarContent({
       </div>
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
         {NAV_SECTIONS.map((section) => {
-          const items = section.items.filter((i) => !i.roles || i.roles.includes(role));
+          const items = section.items.filter((i) => (!i.roles || i.roles.includes(role)) && (!i.feature || !features || features.includes(i.feature)));
           if (!items.length) return null;
           return (
             <div key={section.title}>

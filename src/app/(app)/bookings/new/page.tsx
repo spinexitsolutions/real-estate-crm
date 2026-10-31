@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { requireFeature } from "@/lib/plans";
+import { UpgradeRequired } from "@/components/billing/upgrade-required";
 import { ArrowLeft, ReceiptText } from "lucide-react";
 import { format } from "date-fns";
 import { db } from "@/lib/db";
@@ -12,6 +14,8 @@ export const metadata = { title: "New booking" };
 export default async function NewBookingPage({ searchParams }: { searchParams: Promise<{ dealId?: string; leadId?: string; propertyId?: string }> }) {
   const sp = await searchParams;
   const user = await requireUser();
+  const lock = await requireFeature("bookings");
+  if (lock) return <UpgradeRequired {...lock} />;
   const agent = user.role === "AGENT";
 
   const deal = sp.dealId ? await db.deal.findUnique({ where: { id: sp.dealId }, include: { lead: true, booking: { select: { id: true } } } }) : null;

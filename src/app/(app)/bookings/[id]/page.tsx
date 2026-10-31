@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { orgFeatures, requireFeature } from "@/lib/plans";
+import { UpgradeRequired } from "@/components/billing/upgrade-required";
 import { PaymentHistory } from "@/components/bookings/payment-history";
 import { DocumentsPanel } from "@/components/documents/documents-panel";
 import { headers } from "next/headers";
@@ -28,6 +30,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireUser();
+  const lock = await requireFeature("bookings");
+  if (lock) return <UpgradeRequired {...lock} />;
+  const feats = new Set(await orgFeatures());
   const settings = await getSettings();
   const b = await db.booking.findUnique({
     where: { id },
@@ -260,6 +265,7 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
             </p>
           </Card>
 
+          {feats.has("customer_portal") && (
           <PortalAccessCard
             leadId={b.lead.id}
             leadName={b.lead.name}
@@ -268,11 +274,12 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
             companyName={settings.companyName}
             access={access ? { token: access.token, hasPin: !!access.pin, lastViewedAt: access.lastViewedAt?.toISOString() ?? null, revokedAt: access.revokedAt?.toISOString() ?? null } : null}
           />
+          )}
 
         </div>
       </div>
 
-      <DocumentsPanel bookingId={b.id} leadId={b.leadId} title="Booking documents" />
+      {feats.has("documents") && <DocumentsPanel bookingId={b.id} leadId={b.leadId} title="Booking documents" />}
     </div>
   );
 }

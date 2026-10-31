@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Bell,
@@ -27,6 +28,8 @@ import { MobileSidebar, SidebarContent } from "./sidebar";
 import { CommandPalette } from "./command-palette";
 import { PushPrompt } from "@/components/notifications/push-toggle";
 import { ReminderPoller } from "@/components/notifications/reminder-poller";
+import { ReadOnlyProvider, setGlobalReadOnlyReason } from "@/components/billing/read-only-context";
+import { toast } from "sonner";
 
 export type ShellNotification = {
   id: string;
@@ -45,6 +48,11 @@ export function AppShell({
   followupCount,
   whatsappUnread = 0,
   logoUrl,
+  features,
+  readOnlyReason = null,
+  statusBanner,
+  suspendedScreen,
+  topBanner,
   children,
 }: {
   user: { name: string; email: string; role: string };
@@ -53,23 +61,51 @@ export function AppShell({
   followupCount: number;
   whatsappUnread?: number;
   logoUrl?: string | null;
+  /** Feature keys of the organization's plan (nav items with a `feature` are hidden when missing). */
+  features?: string[];
+  /** Why the organization cannot make changes right now (trial ended, unpaid, suspended). */
+  readOnlyReason?: string | null;
+  /** Subscription / trial status strip (server rendered). */
+  statusBanner?: React.ReactNode;
+  /** When set (account suspended), replaces every page except /billing. */
+  suspendedScreen?: React.ReactNode;
+  /** Extra banner above everything, e.g. "You are viewing as ..." during super admin impersonation. */
+  topBanner?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setGlobalReadOnlyReason(readOnlyReason);
+    if (!readOnlyReason) return;
+    // Server action errors are masked in production; explain read-only failures instead of "something went wrong".
+    const onRejection = (e: PromiseRejectionEvent) => {
+      e.preventDefault();
+      toast.error(readOnlyReason);
+    };
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => window.removeEventListener("unhandledrejection", onRejection);
+  }, [readOnlyReason]);
+
+  const blocked = !!suspendedScreen && !pathname.startsWith("/billing");
 
   return (
+    <ReadOnlyProvider reason={readOnlyReason}>
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">
         <Suspense>
-          <SidebarContent role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} logoUrl={logoUrl} />
+          <SidebarContent role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} logoUrl={logoUrl} features={features} />
         </Suspense>
       </aside>
       <Suspense>
-        <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} logoUrl={logoUrl} />
+        <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} logoUrl={logoUrl} features={features} />
       </Suspense>
 
       <div className="lg:pl-64">
+        {topBanner}
+        {statusBanner}
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200/80 bg-white/85 px-4 backdrop-blur-md sm:px-6">
           <button onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Open menu">
             <Menu className="size-5" />
@@ -179,12 +215,13 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{blocked ? suspendedScreen : children}</main>
       </div>
 
       <CommandPalette open={paletteOpen} setOpen={setPaletteOpen} />
       <ReminderPoller />
     </div>
+    </ReadOnlyProvider>
   );
 }
 

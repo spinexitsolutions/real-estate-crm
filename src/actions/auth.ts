@@ -100,6 +100,12 @@ export async function register(_: FormState, fd: FormData): Promise<FormState> {
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not create your account. Please try again." };
   }
+  // Plan chosen on the pricing page (/signup?plan=CODE): trial runs on that plan
+  const planCode = str(fd, "plan").toUpperCase();
+  if (planCode) {
+    const plan = await rawDb.plan.findFirst({ where: { code: planCode, active: true }, select: { id: true } });
+    if (plan) await rawDb.organization.update({ where: { id: created.org.id }, data: { planId: plan.id } });
+  }
   await createSession(created.user);
   redirect("/onboarding");
 }

@@ -39,6 +39,7 @@ import { WhatsAppIcon } from "@/components/ui/icons";
 import { SendWhatsAppButton } from "@/components/whatsapp/send-whatsapp";
 import { FollowUpList } from "@/components/followups/followup-list";
 import { telephonyStatus } from "@/lib/telephony";
+import { orgFeatures } from "@/lib/plans";
 import { LeadCallsCard } from "@/components/calls/lead-calls-card";
 import { LeadCheckInsCard } from "@/components/site-visits/lead-checkins-card";
 import { DocumentsPanel } from "@/components/documents/documents-panel";
@@ -95,6 +96,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (user.role === "AGENT" && lead.assignedToId !== user.id) notFound();
 
   const manager = isManager(user);
+  const feats = new Set(await orgFeatures());
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const origin = process.env.APP_URL || `${h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https")}://${host}`;
@@ -190,7 +192,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               currentUserId={user.id}
               defaultCommission={settings.defaultCommission}
               currency={cur}
-              clickToCallEnabled={telephonyStatus(settings).enabled}
+              clickToCallEnabled={telephonyStatus(settings).enabled && feats.has("click_to_call")}
             />
           </div>
         </div>
@@ -250,7 +252,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           </Card>
 
           <LeadCallsCard leadId={lead.id} />
-          <DocumentsPanel leadId={lead.id} />
+          {feats.has("documents") && <DocumentsPanel leadId={lead.id} />}
         </div>
 
         <div className="space-y-6">
@@ -382,8 +384,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             )}
           </Card>
 
-          <LeadBookingsCard leadId={lead.id} />
+          {feats.has("bookings") && <LeadBookingsCard leadId={lead.id} />}
 
+          {feats.has("customer_portal") && (
           <PortalAccessCard
             leadId={lead.id}
             leadName={lead.name}
@@ -392,8 +395,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             companyName={settings.companyName}
             access={pa ? { token: pa.token, hasPin: !!pa.pin, lastViewedAt: pa.lastViewedAt?.toISOString() ?? null, revokedAt: pa.revokedAt?.toISOString() ?? null } : null}
           />
+          )}
 
-          <LeadCheckInsCard leadId={lead.id} />
+          {feats.has("attendance") && <LeadCheckInsCard leadId={lead.id} />}
 
           <Card className="p-5">
             <div className="flex items-center gap-3">
