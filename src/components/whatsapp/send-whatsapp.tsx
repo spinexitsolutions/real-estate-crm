@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { CheckCheck, ExternalLink, LoaderCircle, Phone, Send } from "lucide-react";
+import { BadgeCheck, CheckCheck, Clock, ExternalLink, LoaderCircle, Phone, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -10,6 +10,7 @@ import { TEMPLATE_CATEGORIES, labelOf } from "@/lib/constants";
 import { formatCompact } from "@/lib/format";
 import { cn, fillTemplate, waLink } from "@/lib/utils";
 import { getWhatsAppContext, sendWhatsApp } from "@/actions/whatsapp";
+import { isWindowOpen, windowRemainingLabel } from "@/lib/whatsapp-window";
 
 type Ctx = Awaited<ReturnType<typeof getWhatsAppContext>>;
 
@@ -56,7 +57,7 @@ export function SendWhatsAppButton({
     if (ctx) return;
     setLoading(true);
     try {
-      const c = await getWhatsAppContext();
+      const c = await getWhatsAppContext(lead.id);
       setCtx(c);
       const first = property ? c.templates.find((t) => t.category === "PROPERTY") : c.templates.find((t) => t.category === "FOLLOW_UP" || t.category === "GREETING");
       if (first) {
@@ -94,7 +95,7 @@ export function SendWhatsAppButton({
     // Open synchronously to avoid popup blockers, then log.
     window.open(waLink(lead.phone, message, ctx?.countryCode ?? "91"), "_blank", "noopener,noreferrer");
     start(async () => {
-      const res = await sendWhatsApp({ leadId: lead.id, phone: lead.phone, body: message, channel: "LINK" });
+      const res = await sendWhatsApp({ leadId: lead.id, phone: lead.phone, body: message, channel: "LINK", templateId: templateId || null });
       if (res.error) toast.error(res.error);
       else {
         toast.success("Message logged to lead timeline");
@@ -106,7 +107,14 @@ export function SendWhatsAppButton({
   const sendApi = () => {
     if (!message.trim()) return void toast.error("Message cannot be empty.");
     start(async () => {
-      const res = await sendWhatsApp({ leadId: lead.id, phone: lead.phone, body: message, channel: "API" });
+      const res = await sendWhatsApp({
+        leadId: lead.id,
+        phone: lead.phone,
+        body: message,
+        channel: "API",
+        templateId: templateId || null,
+        vars: { property: vars.property, price: vars.price, location: vars.location, date: vars.date },
+      });
       if (res.error) toast.error(res.error);
       else {
         toast.success(`Message sent to ${lead.name}`);
@@ -114,6 +122,10 @@ export function SendWhatsAppButton({
       }
     });
   };
+
+  const windowOpen = isWindowOpen(ctx?.lastInboundAt);
+  const selected = ctx?.templates.find((t) => t.id === templateId);
+  const apiBlocked = !!ctx?.apiEnabled && !windowOpen && !selected?.metaName;
 
   const now = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
@@ -161,7 +173,13 @@ export function SendWhatsAppButton({
               Cancel
             </Button>
             {ctx?.apiEnabled && (
-              <Button variant="outline" onClick={sendApi} loading={pending} disabled={loading}>
+              <Button
+                variant="outline"
+                onClick={sendApi}
+                loading={pending}
+                disabled={loading || apiBlocked}
+                title={apiBlocked ? "Outside the 24-hour window: choose an approved template to send via API" : undefined}
+              >
                 <Send /> Send via API
               </Button>
             )}
@@ -178,6 +196,26 @@ export function SendWhatsAppButton({
         ) : (
           <div className="grid gap-6 md:grid-cols-[1.1fr_1fr]">
             <div className="min-w-0 space-y-4">
+              {ctx.apiEnabled && (
+                <div
+                  className={cn(
+                    "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-xs leading-relaxed",
+                    windowOpen ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800",
+                  )}
+                >
+                  {windowOpen ? <CheckCheck className="mt-0.5 size-4 shrink-0" /> : <Clock className="mt-0.5 size-4 shrink-0" />}
+                  {windowOpen ? (
+                    <span>
+                      <span className="font-semibold">Customer replied within 24 hours</span> ({windowRemainingLabel(ctx.lastInboundAt)}). Free text can be sent via API.
+                    </span>
+                  ) : (
+                    <span>
+                      <span className="font-semibold">Outside the 24-hour window.</span> Only approved templates (marked with a check) can be sent via API.
+                      &quot;Open in WhatsApp&quot; always works.
+                    </span>
+                  )}
+                </div>
+              )}
               <div>
                 <p className="label">Template</p>
                 {categories.length > 1 && (
@@ -204,7 +242,10 @@ export function SendWhatsAppButton({
                         templateId === t.id ? "bg-emerald-50 text-emerald-800" : "text-slate-700 hover:bg-slate-50",
                       )}
                     >
-                      <span className="truncate font-medium">{t.name}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate font-medium">{t.name}</span>
+                        {t.metaName && <BadgeCheck className="size-3.5 shrink-0 text-emerald-600" aria-label="Approved template" />}
+                      </span>
                       <span className="shrink-0 text-[11px] text-slate-400">{labelOf(TEMPLATE_CATEGORIES, t.category)}</span>
                     </button>
                   ))}
@@ -216,6 +257,11 @@ export function SendWhatsAppButton({
                   <span className="text-xs text-slate-400">{message.length} characters</span>
                 </div>
                 <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={8} className="input resize-y" placeholder="Type your message..." />
+                {ctx.apiEnabled && !windowOpen && selected?.metaName && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Via API, WhatsApp delivers the approved template <span className="font-medium text-slate-700">{selected.metaName}</span> exactly as approved by Meta. Edits here apply only to &quot;Open in WhatsApp&quot;.
+                  </p>
+                )}
                 {!ctx.apiEnabled && (
                   <p className="mt-2 text-xs text-slate-500">
                     Opens WhatsApp with this message pre-filled. Connect the WhatsApp Business API in Settings to send directly from the CRM.

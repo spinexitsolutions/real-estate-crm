@@ -13,13 +13,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     dueAt: { lte: endOfDay(now) },
     ...(user.role === "AGENT" ? { assignedToId: user.id } : {}),
   };
-  const [count, due] = await Promise.all([
+  const [count, due, waUnread] = await Promise.all([
     db.followUp.count({ where }),
     db.followUp.findMany({
       where,
       orderBy: { dueAt: "asc" },
       take: 10,
       include: { lead: { select: { name: true } } },
+    }),
+    db.lead.aggregate({
+      where: { unreadMessages: { gt: 0 }, ...(user.role === "AGENT" ? { assignedToId: user.id } : {}) },
+      _sum: { unreadMessages: true },
     }),
   ]);
 
@@ -28,6 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       user={{ name: user.name, email: user.email, role: user.role }}
       company={settings.companyName}
       followupCount={count}
+      whatsappUnread={waUnread._sum.unreadMessages ?? 0}
       notifications={due.map((f) => ({
         id: f.id,
         title: f.title,

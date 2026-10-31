@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { Eye, EyeOff, CircleAlert } from "lucide-react";
 import { login } from "@/actions/auth";
 import { SubmitButton } from "@/components/ui/button";
@@ -21,14 +22,22 @@ export function LoginForm({ next }: { next: string }) {
       <Field label="Email address" htmlFor="email">
         <Input id="email" name="email" type="email" autoComplete="email" required placeholder="you@company.com" className="h-10" />
       </Field>
-      <Field label="Password" htmlFor="password">
+      <div>
+        <div className="mb-1.5 flex items-center justify-between">
+          <label htmlFor="password" className="text-[13px] font-medium text-slate-700">
+            Password
+          </label>
+          <Link href="/forgot-password" className="text-[13px] font-medium text-brand-600 hover:text-brand-700">
+            Forgot password?
+          </Link>
+        </div>
         <div className="relative">
           <Input id="password" name="password" type={show ? "text" : "password"} autoComplete="current-password" required placeholder="Enter your password" className="h-10 pr-10" />
           <button type="button" onClick={() => setShow((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Toggle password visibility">
             {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </button>
         </div>
-      </Field>
+      </div>
       <SubmitButton size="lg" className="w-full" pendingText="Signing in...">
         Sign in
       </SubmitButton>

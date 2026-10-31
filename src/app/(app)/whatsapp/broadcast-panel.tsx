@@ -16,7 +16,7 @@ import { cn, fillTemplate } from "@/lib/utils";
 import { broadcast, logBroadcastLink, previewBroadcast, type BroadcastFilters } from "@/actions/whatsapp";
 import { HighlightedBody } from "./templates-manager";
 
-type Template = { id: string; name: string; category: string; body: string };
+type Template = { id: string; name: string; category: string; body: string; metaName: string | null };
 type Preview = Awaited<ReturnType<typeof previewBroadcast>>;
 
 export function BroadcastPanel({
@@ -50,6 +50,7 @@ export function BroadcastPanel({
   const [links, setLinks] = useState<{ id: string; name: string; url: string }[] | null>(null);
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const selectedApproved = templates.find((t) => t.id === templateId && t.metaName);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,10 +104,21 @@ export function BroadcastPanel({
                   const t = templates.find((x) => x.id === e.target.value);
                   setBody(t?.body ?? "");
                 }}
-                options={templates.map((t) => ({ value: t.id, label: t.name }))}
+                options={templates.map((t) => ({ value: t.id, label: t.metaName ? `${t.name} (Approved)` : t.name }))}
                 placeholder="Custom message"
               />
             </Field>
+            {channel === "API" && !selectedApproved && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800">
+                <span className="font-semibold">Approved template required.</span> WhatsApp only allows Meta-approved templates for bulk or first messages
+                sent through the API. Choose a template marked &quot;Approved&quot; (add its Meta name in the Templates tab), or switch to click-to-send.
+              </div>
+            )}
+            {channel === "API" && selectedApproved && (
+              <p className="text-xs text-slate-500">
+                Sent as the approved template <span className="font-mono font-medium text-slate-700">{selectedApproved.metaName}</span>. Edits to the text below apply to click-to-send only.
+              </p>
+            )}
             <Field label="Message">
               <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={7} className="input resize-y" placeholder="Hi {{name}}, ..." />
             </Field>
@@ -158,7 +170,7 @@ export function BroadcastPanel({
                   </>
                 )}
               </p>
-              <Button variant="success" onClick={() => setConfirmOpen(true)} loading={pending} disabled={!body.trim() || !preview?.count || loadingPreview}>
+              <Button variant="success" onClick={() => setConfirmOpen(true)} loading={pending} disabled={!body.trim() || !preview?.count || loadingPreview || (channel === "API" && !selectedApproved)}>
                 <Megaphone /> {channel === "API" ? "Send broadcast" : "Prepare messages"}
               </Button>
             </div>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { addMinutes } from "date-fns";
 import { db } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
+import { notifyUser } from "@/lib/notify";
 import { LEAD_SOURCES, OPEN_LEAD_STATUSES, PROPERTY_TYPES } from "@/lib/constants";
 import { normalizePhone } from "@/lib/utils";
 
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
 
   // Dedupe by phone (match on last 10 digits)
   const last10 = digits.slice(-10);
-  const existing = await db.lead.findFirst({ where: { phone: { contains: last10 } }, orderBy: { createdAt: "desc" } });
+  const existing = await db.lead.findFirst({ where: { phone: { contains: last10, mode: "insensitive" } }, orderBy: { createdAt: "desc" } });
   if (existing) {
     await logActivity({
       type: "NOTE",
@@ -81,6 +82,7 @@ export async function POST(req: Request) {
       leadId: existing.id,
     });
     await db.lead.update({ where: { id: existing.id }, data: { updatedAt: new Date(), ...(existing.status === "LOST" ? { status: "NEW" } : {}) } });
+    await notifyUser(existing.assignedToId, { title: `Repeat enquiry: ${existing.name}`, body: message ? message.slice(0, 120) : `New enquiry via ${source.replace(/_/g, " ").toLowerCase()}`, url: `/leads/${existing.id}`, tag: `lead-${existing.id}` });
     return json({ ok: true, leadId: existing.id, duplicate: true });
   }
 
@@ -123,5 +125,8 @@ export async function POST(req: Request) {
     },
   });
 
-  return json({ ok: true, leadId: lead.id }, 201);
+  if (assignee) {
+    await notifyUser(assignee.id, { title: `New lead assigned: ${lead.name}`, body: `${lead.phone} - from ${source.replace(/_/g, " ").toLowerCase()}. Call within 15 minutes.`, url: `/leads/${lead.id}`, tag: `lead-${lead.id}` });
+  }
+    return json({ ok: true, leadId: lead.id }, 201);
 }

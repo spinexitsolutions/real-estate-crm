@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 
+process.env.TZ = process.env.APP_TIMEZONE || "Asia/Kolkata";
 const db = new PrismaClient();
 
 // Deterministic pseudo-random so the demo looks the same every time
@@ -279,10 +280,10 @@ async function main() {
   }
 
   console.log("Creating WhatsApp templates...");
-  const templates = [
+  const templates: { name: string; category: string; body: string; metaName?: string; metaLanguage?: string; metaParams?: string }[] = [
     { name: "Welcome / First Contact", category: "GREETING", body: "Hi {{name}}, thank you for your enquiry with {{company}}. I am {{agent}}, your property advisor. Could you share a convenient time to discuss your requirements?" },
-    { name: "Share Property Details", category: "PROPERTY", body: "Hi {{name}}, here is a property that matches your requirement:\n\n{{property}}\nLocation: {{location}}\nPrice: {{price}}\n\nWould you like to schedule a site visit this week?" },
-    { name: "Site Visit Confirmation", category: "SITE_VISIT", body: "Hi {{name}}, your site visit for {{property}} is confirmed on {{date}}. Location: {{location}}. I will be there to receive you. - {{agent}}, {{company}}" },
+    { name: "Share Property Details", category: "PROPERTY", body: "Hi {{name}}, here is a property that matches your requirement:\n\n{{property}}\nLocation: {{location}}\nPrice: {{price}}\n\nWould you like to schedule a site visit this week?", metaName: "property_followup", metaLanguage: "en", metaParams: "name,property,location,price" },
+    { name: "Site Visit Confirmation", category: "SITE_VISIT", body: "Hi {{name}}, your site visit for {{property}} is confirmed on {{date}}. Location: {{location}}. I will be there to receive you. - {{agent}}, {{company}}", metaName: "site_visit_confirmation", metaLanguage: "en", metaParams: "name,property,date,location,agent,company" },
     { name: "Gentle Follow-up", category: "FOLLOW_UP", body: "Hi {{name}}, just checking in on your property search. We have a few new listings that fit your budget. Shall I share them?" },
     { name: "Post Site Visit Feedback", category: "FOLLOW_UP", body: "Hi {{name}}, thank you for visiting {{property}} today. How did you like it? Happy to answer any questions on pricing or payment plans." },
     { name: "Payment Reminder", category: "PAYMENT", body: "Dear {{name}}, this is a gentle reminder regarding the upcoming payment for {{property}}. Please reach out if you need any assistance. - {{company}}" },
@@ -305,6 +306,35 @@ async function main() {
         createdAt: daysAgo(int(0, 30)),
       },
     });
+  }
+
+  console.log("Creating WhatsApp conversations...");
+  const conversations: { reply: string; replyAgoMin: number; ourText: string; unread: number }[] = [
+    { ourText: "Hi {first}, thank you for your enquiry with Skyline Realty. Could you share a convenient time to discuss your requirements?", reply: "Hi, evening after 6 works. Can you share 2 BHK options near metro?", replyAgoMin: 25, unread: 2 },
+    { ourText: "Hi {first}, here is a property that matches your requirement. Would you like to schedule a site visit this week?", reply: "Yes, Saturday 11 AM is good for us. Please send the location.", replyAgoMin: 180, unread: 1 },
+    { ourText: "Hi {first}, just checking in on your property search. Shall I share new listings?", reply: "Not right now, will get back next month.", replyAgoMin: 60 * 30, unread: 0 },
+    { ourText: "Hi {first}, thank you for visiting the site today. How did you like it?", reply: "Liked it. What is the final price with parking?", replyAgoMin: 60 * 50, unread: 0 },
+  ];
+  const convLeads = leads.filter((l) => !["LOST", "WON"].includes(l.status)).slice(0, conversations.length);
+  for (let i = 0; i < convLeads.length; i++) {
+    const lead = convLeads[i];
+    const c = conversations[i];
+    const first = lead.name.split(" ")[0];
+    const replyAt = new Date(Date.now() - c.replyAgoMin * 60000);
+    const sentAt = new Date(replyAt.getTime() - 40 * 60000);
+    await db.whatsAppMessage.create({
+      data: { phone: lead.phone, body: c.ourText.replace("{first}", first), direction: "OUT", channel: "API", status: "READ", waMessageId: `wamid.seed.out.${i}`, leadId: lead.id, userId: lead.assignedToId ?? admin.id, createdAt: sentAt },
+    });
+    await db.whatsAppMessage.create({
+      data: { phone: lead.phone, body: c.reply, direction: "IN", channel: "API", status: "RECEIVED", waMessageId: `wamid.seed.in.${i}`, leadId: lead.id, createdAt: replyAt },
+    });
+    if (i === 0) {
+      await db.whatsAppMessage.create({
+        data: { phone: lead.phone, body: "Also, is home loan assistance available?", direction: "IN", channel: "API", status: "RECEIVED", waMessageId: `wamid.seed.in.extra`, leadId: lead.id, createdAt: new Date(replyAt.getTime() + 2 * 60000) },
+      });
+    }
+    await db.lead.update({ where: { id: lead.id }, data: { lastInboundAt: replyAt, unreadMessages: c.unread } });
+    await db.activity.create({ data: { type: "WHATSAPP", content: `Received: ${c.reply}`, leadId: lead.id, createdAt: replyAt } });
   }
 
   console.log("\nDone. Sign in with:");

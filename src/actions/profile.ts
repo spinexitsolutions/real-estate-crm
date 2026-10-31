@@ -31,3 +31,14 @@ export async function changePassword(fd: FormData): Promise<ActionResult> {
   await db.user.update({ where: { id: user.id }, data: { password: await bcrypt.hash(next, 10) } });
   return { ok: true };
 }
+
+export async function updateNotificationPrefs(prefs: { notifyEmail: boolean; notifyPush: boolean; notifyWhatsApp: boolean }): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Your session has expired. Please sign in again." };
+  await db.user.update({
+    where: { id: user.id },
+    data: { notifyEmail: !!prefs.notifyEmail, notifyPush: !!prefs.notifyPush, notifyWhatsApp: !!prefs.notifyWhatsApp },
+  });
+  revalidatePath("/profile");
+  return { ok: true };
+}

@@ -11,11 +11,13 @@ export function SidebarContent({
   role,
   company,
   followupCount,
+  whatsappUnread = 0,
   onNavigate,
 }: {
   role: string;
   company: string;
   followupCount: number;
+  whatsappUnread?: number;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -55,6 +57,9 @@ export function SidebarContent({
                     >
                       <Icon className={cn("size-[18px]", active ? "text-brand-200" : "text-slate-500 group-hover:text-slate-300")} />
                       <span className="flex-1">{item.label}</span>
+                      {item.badgeKey === "whatsapp" && whatsappUnread > 0 && (
+                        <span className="rounded-full bg-emerald-500 px-1.5 py-px text-[11px] font-semibold text-white">{whatsappUnread > 99 ? "99+" : whatsappUnread}</span>
+                      )}
                       {item.badgeKey === "followups" && followupCount > 0 && (
                         <span className="rounded-full bg-rose-500 px-1.5 py-px text-[11px] font-semibold text-white">{followupCount > 99 ? "99+" : followupCount}</span>
                       )}

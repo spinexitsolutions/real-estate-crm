@@ -18,7 +18,7 @@ export type NavItem = {
   label: string;
   icon: LucideIcon | typeof WhatsAppIcon;
   roles?: string[];
-  badgeKey?: "followups";
+  badgeKey?: "followups" | "whatsapp";
   match?: (path: string, search: string) => boolean;
 };
 
@@ -39,7 +39,7 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
   },
   {
     title: "Engage",
-    items: [{ href: "/whatsapp", label: "WhatsApp", icon: WhatsAppIcon }],
+    items: [{ href: "/whatsapp", label: "WhatsApp", icon: WhatsAppIcon, badgeKey: "whatsapp" }],
   },
   {
     title: "Insights",

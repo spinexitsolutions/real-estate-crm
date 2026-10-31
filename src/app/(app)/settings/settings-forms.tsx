@@ -10,6 +10,7 @@ import {
   ExternalLink,
   RefreshCw,
   SlidersHorizontal,
+  Wand2,
   Webhook,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,6 +36,9 @@ type S = {
   waPhoneNumberId: string;
   hasToken: boolean;
   leadWebhookKey: string;
+  waVerifyToken: string;
+  hasAppSecret: boolean;
+  waDigestTemplate: string;
 };
 
 const CURRENCIES = [
@@ -151,8 +155,15 @@ function CodeBlock({ code }: { code: string }) {
   );
 }
 
+function randomToken() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export function SettingsForms({ settings: s, origin }: { settings: S; origin: string }) {
   const [waEnabled, setWaEnabled] = useState(s.waApiEnabled);
+  const [verifyToken, setVerifyToken] = useState(s.waVerifyToken);
   const [key, setKey] = useState(s.leadWebhookKey);
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [snippet, setSnippet] = useState<"curl" | "html" | "js">("curl");
@@ -276,13 +287,43 @@ export function SettingsForms({ settings: s, origin }: { settings: S; origin: st
               <Input name="waAccessToken" type="password" autoComplete="off" placeholder={s.hasToken ? "Saved token hidden" : "EAAG..."} />
             </Field>
           </div>
+          <div className="border-t border-slate-100 pt-5">
+            <p className="text-sm font-semibold text-slate-900">Incoming messages (two-way inbox)</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Connect the webhook so customer replies and delivery/read receipts appear in the WhatsApp inbox, and unknown numbers become new leads automatically.
+            </p>
+            <div className="mt-4 space-y-4">
+              <Field label="Callback URL">
+                <CopyField value={`${origin}/api/webhooks/whatsapp`} label="WhatsApp callback URL" />
+              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Verify token" hint="Paste the same value in Meta when adding the callback URL.">
+                  <div className="flex gap-2">
+                    <Input name="waVerifyToken" value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)} placeholder="Any secret text" className="font-mono text-xs" />
+                    <Button variant="secondary" size="icon" aria-label="Generate verify token" title="Generate" onClick={() => setVerifyToken(randomToken())}>
+                      <Wand2 />
+                    </Button>
+                  </div>
+                </Field>
+                <Field label="App secret" hint={s.hasAppSecret ? "Saved. Leave blank to keep it." : "Recommended: used to verify that webhooks come from Meta."}>
+                  <Input name="waAppSecret" type="password" autoComplete="off" placeholder={s.hasAppSecret ? "Saved secret hidden" : "From App settings, Basic"} />
+                </Field>
+              </div>
+              <Field label="Agent daily digest template (optional)" hint="Approved Meta template used to send each agent their morning follow-up summary on WhatsApp. Parameters: {{1}} agent name, {{2}} follow-ups due today, {{3}} overdue.">
+                <Input name="waDigestTemplate" defaultValue={s.waDigestTemplate} placeholder="e.g. daily_followup_digest" className="font-mono text-[13px]" />
+              </Field>
+            </div>
+          </div>
           <div className="rounded-lg bg-slate-50 p-4 text-[13px] text-slate-600">
             <p className="mb-2 font-medium text-slate-800">How to connect</p>
             <ol className="list-decimal space-y-1 pl-5">
-              <li>Create a Meta Business app and add the WhatsApp product.</li>
-              <li>Register and verify your business phone number.</li>
-              <li>Copy the Phone number ID from WhatsApp, API Setup.</li>
-              <li>Create a System User and generate a permanent token with whatsapp_business_messaging permission.</li>
+              <li>Create a Meta Business app (developers.facebook.com) and add the WhatsApp product.</li>
+              <li>Register and verify your business phone number, then copy the Phone number ID from WhatsApp, API Setup.</li>
+              <li>Create a System User in Business Settings and generate a permanent token with whatsapp_business_messaging permission.</li>
+              <li>In WhatsApp, Configuration, click Edit next to Webhook: paste the Callback URL and Verify token above, then Verify and save.</li>
+              <li>Under Webhook fields, subscribe to <span className="font-mono text-xs">messages</span>.</li>
+              <li>Copy the App secret from App settings, Basic, paste it above and save.</li>
+              <li>Create message templates in WhatsApp Manager; once approved, add their exact names on the WhatsApp, Templates page.</li>
             </ol>
             <a
               href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"

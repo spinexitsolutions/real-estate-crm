@@ -32,6 +32,9 @@ export default async function SettingsPage() {
           waPhoneNumberId: s.waPhoneNumberId ?? "",
           hasToken: !!s.waAccessToken,
           leadWebhookKey: s.leadWebhookKey ?? "",
+          waVerifyToken: s.waVerifyToken ?? "",
+          hasAppSecret: !!s.waAppSecret,
+          waDigestTemplate: s.waDigestTemplate ?? "",
         }}
       />
     </div>

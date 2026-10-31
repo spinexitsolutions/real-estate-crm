@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { startOfMonth } from "date-fns";
-import { CircleCheck, CircleX, FileText, Megaphone, MessageSquareText, PlugZap, Send } from "lucide-react";
+import { CircleCheck, CircleX, FileText, Inbox, Megaphone, MessageSquareText, PlugZap, Send } from "lucide-react";
 import type { Prisma } from "@prisma/client";
-import { requireUser, isManager } from "@/lib/auth";
+import { requireUser, isManager, leadScope, type CurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { formatDateTime, formatRelative } from "@/lib/format";
@@ -15,31 +15,35 @@ import { Pagination, SearchInput, FilterSelect, ClearFilters } from "@/component
 import { WhatsAppIcon } from "@/components/ui/icons";
 import { TemplatesManager } from "./templates-manager";
 import { BroadcastPanel } from "./broadcast-panel";
+import { InboxView } from "./inbox";
 
 export const metadata = { title: "WhatsApp" };
 
 const PAGE_SIZE = 20;
 
-type SP = { tab?: string; q?: string; channel?: string; page?: string };
+type SP = { tab?: string; q?: string; channel?: string; page?: string; lead?: string };
 
 export default async function WhatsAppPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const user = await requireUser();
   const manager = isManager(user);
   const settings = await getSettings();
-  const tab = ["templates", "broadcast", "log"].includes(sp.tab ?? "") ? sp.tab! : "templates";
+  const tab = ["inbox", "templates", "broadcast", "log"].includes(sp.tab ?? "") ? sp.tab! : "inbox";
   const apiReady = Boolean(settings.waApiEnabled && settings.waPhoneNumberId && settings.waAccessToken);
 
-  const msgScope: Prisma.WhatsAppMessageWhereInput = user.role === "AGENT" ? { userId: user.id } : {};
+  const msgScope: Prisma.WhatsAppMessageWhereInput = user.role === "AGENT" ? { OR: [{ userId: user.id }, { lead: { assignedToId: user.id } }] } : {};
   const monthStart = startOfMonth(new Date());
-  const [templates, sentMonth, failedMonth, reached] = await Promise.all([
+  const [templates, sentMonth, failedMonth, reached, unreadAgg] = await Promise.all([
     db.whatsAppTemplate.findMany({ orderBy: { createdAt: "asc" } }),
-    db.whatsAppMessage.count({ where: { ...msgScope, createdAt: { gte: monthStart }, status: "SENT" } }),
+    db.whatsAppMessage.count({ where: { ...msgScope, direction: "OUT", createdAt: { gte: monthStart }, status: { not: "FAILED" } } }),
     db.whatsAppMessage.count({ where: { ...msgScope, createdAt: { gte: monthStart }, status: "FAILED" } }),
-    db.whatsAppMessage.groupBy({ by: ["leadId"], where: { ...msgScope, createdAt: { gte: monthStart }, leadId: { not: null } } }),
+    db.whatsAppMessage.groupBy({ by: ["leadId"], where: { ...msgScope, direction: "OUT", createdAt: { gte: monthStart }, leadId: { not: null } } }),
+    db.lead.aggregate({ where: { ...leadScope(user), unreadMessages: { gt: 0 } }, _sum: { unreadMessages: true } }),
   ]);
+  const unread = unreadAgg._sum.unreadMessages ?? 0;
 
   const tabs = [
+    { value: "inbox", label: "Inbox", icon: Inbox, count: unread },
     { value: "templates", label: "Templates", icon: FileText },
     { value: "broadcast", label: "Broadcast", icon: Megaphone },
     { value: "log", label: "Message log", icon: MessageSquareText },
@@ -47,12 +51,12 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader icon={WhatsAppIcon} title="WhatsApp" description="Templates, bulk messaging and a complete log of every conversation started from the CRM." />
+      <PageHeader icon={WhatsAppIcon} title="WhatsApp" description="Two-way inbox, templates, bulk messaging and a complete log of every conversation." />
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Messages this month" value={sentMonth} icon={Send} tone="emerald" sub="Successfully sent" />
         <StatCard label="Leads reached" value={reached.length} icon={MessageSquareText} tone="sky" sub="Unique leads this month" />
-        <StatCard label="Templates" value={templates.length} icon={FileText} tone="violet" sub="Ready to use" />
+        <StatCard label="Unread replies" value={unread} icon={Inbox} tone="violet" sub="Waiting in your inbox" />
         <StatCard label="Failed" value={failedMonth} icon={CircleX} tone="rose" sub="API delivery errors" />
       </div>
 
@@ -92,7 +96,7 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Pro
         {tabs.map((t) => (
           <Link
             key={t.value}
-            href={t.value === "templates" ? "/whatsapp" : `/whatsapp?tab=${t.value}`}
+            href={t.value === "inbox" ? "/whatsapp" : `/whatsapp?tab=${t.value}`}
             className={cn(
               "-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition",
               tab === t.value ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800",
@@ -100,17 +104,43 @@ export default async function WhatsAppPage({ searchParams }: { searchParams: Pro
           >
             <t.icon className="size-4" />
             {t.label}
+            {"count" in t && t.count ? (
+              <span className="rounded-full bg-emerald-500 px-1.5 text-[11px] font-semibold text-white">{t.count}</span>
+            ) : null}
           </Link>
         ))}
       </div>
 
+      {tab === "inbox" && (
+        <InboxSection
+          user={user}
+          sp={sp}
+          apiEnabled={apiReady}
+          countryCode={settings.defaultCountryCode}
+          company={settings.companyName}
+          templates={templates.map((t) => ({ id: t.id, name: t.name, body: t.body, metaName: t.metaName }))}
+        />
+      )}
+
       {tab === "templates" && (
-        <TemplatesManager templates={templates.map((t) => ({ id: t.id, name: t.name, category: t.category, body: t.body, updatedAt: t.updatedAt.toISOString() }))} canDelete={manager} />
+        <TemplatesManager
+          templates={templates.map((t) => ({
+            id: t.id,
+            name: t.name,
+            category: t.category,
+            body: t.body,
+            updatedAt: t.updatedAt.toISOString(),
+            metaName: t.metaName,
+            metaLanguage: t.metaLanguage,
+            metaParams: t.metaParams,
+          }))}
+          canDelete={manager}
+        />
       )}
 
       {tab === "broadcast" && (
         <BroadcastPanel
-          templates={templates.map((t) => ({ id: t.id, name: t.name, category: t.category, body: t.body }))}
+          templates={templates.map((t) => ({ id: t.id, name: t.name, category: t.category, body: t.body, metaName: t.metaName }))}
           apiEnabled={apiReady}
           manager={manager}
           users={manager ? await db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : []}
@@ -133,7 +163,7 @@ async function MessageLog({ sp, scope }: { sp: SP; scope: Prisma.WhatsAppMessage
     ...scope,
     ...(sp.channel ? { channel: sp.channel } : {}),
     ...(sp.q
-      ? { OR: [{ phone: { contains: sp.q } }, { body: { contains: sp.q } }, { lead: { name: { contains: sp.q } } }] }
+      ? { OR: [{ phone: { contains: sp.q, mode: "insensitive" } }, { body: { contains: sp.q, mode: "insensitive" } }, { lead: { name: { contains: sp.q, mode: "insensitive" } } }] }
       : {}),
   };
   const [total, rows] = await Promise.all([
@@ -170,7 +200,7 @@ async function MessageLog({ sp, scope }: { sp: SP; scope: Prisma.WhatsAppMessage
               <tr>
                 <th className="table-th">Recipient</th>
                 <th className="table-th">Message</th>
-                <th className="table-th">Sent by</th>
+                <th className="table-th">From</th>
                 <th className="table-th">Channel</th>
                 <th className="table-th">Status</th>
                 <th className="table-th">Time</th>
@@ -198,7 +228,7 @@ async function MessageLog({ sp, scope }: { sp: SP; scope: Prisma.WhatsAppMessage
                     </p>
                     {m.error && <p className="mt-0.5 truncate text-xs text-rose-600">{m.error}</p>}
                   </td>
-                  <td className="table-td">{m.user?.name ?? "-"}</td>
+                  <td className="table-td">{m.direction === "IN" ? <span className="text-slate-400">Customer</span> : (m.user?.name ?? "-")}</td>
                   <td className="table-td">
                     <Badge className={m.channel === "API" ? "bg-violet-50 text-violet-700 ring-violet-600/20" : "bg-slate-50 text-slate-600 ring-slate-500/20"}>
                       {m.channel === "API" ? "Business API" : "Click-to-chat"}
@@ -209,9 +239,13 @@ async function MessageLog({ sp, scope }: { sp: SP; scope: Prisma.WhatsAppMessage
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-600">
                         <CircleX className="size-3.5" /> Failed
                       </span>
+                    ) : m.direction === "IN" ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-sky-600">
+                        <Inbox className="size-3.5" /> Received
+                      </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
-                        <CircleCheck className="size-3.5" /> Sent
+                        <CircleCheck className="size-3.5" /> {m.status === "READ" ? "Read" : m.status === "DELIVERED" ? "Delivered" : "Sent"}
                       </span>
                     )}
                   </td>
@@ -226,5 +260,91 @@ async function MessageLog({ sp, scope }: { sp: SP; scope: Prisma.WhatsAppMessage
       )}
       <Pagination page={page} pageSize={PAGE_SIZE} total={total} basePath="/whatsapp" searchParams={{ ...sp }} />
     </Card>
+  );
+}
+
+async function InboxSection({
+  user,
+  sp,
+  apiEnabled,
+  countryCode,
+  company,
+  templates,
+}: {
+  user: CurrentUser;
+  sp: SP;
+  apiEnabled: boolean;
+  countryCode: string;
+  company: string;
+  templates: { id: string; name: string; body: string; metaName: string | null }[];
+}) {
+  const scope = leadScope(user);
+  const groups = await db.whatsAppMessage.groupBy({
+    by: ["leadId"],
+    where: { leadId: { not: null }, lead: scope },
+    _max: { createdAt: true },
+    orderBy: { _max: { createdAt: "desc" } },
+    take: 150,
+  });
+  const ids = groups.map((g) => g.leadId!).filter(Boolean);
+  const [leads, lastMessages] = await Promise.all([
+    db.lead.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, phone: true, unreadMessages: true } }),
+    db.whatsAppMessage.findMany({
+      where: { leadId: { in: ids } },
+      orderBy: { createdAt: "desc" },
+      distinct: ["leadId"],
+      select: { leadId: true, body: true, direction: true, createdAt: true },
+    }),
+  ]);
+  const leadMap = new Map(leads.map((l) => [l.id, l]));
+  const lastMap = new Map(lastMessages.map((m) => [m.leadId!, m]));
+  const conversations = ids
+    .map((id) => {
+      const l = leadMap.get(id);
+      const m = lastMap.get(id);
+      if (!l || !m) return null;
+      return { leadId: id, name: l.name, phone: l.phone, unread: l.unreadMessages, lastAt: m.createdAt.toISOString(), lastBody: m.body, lastDirection: m.direction };
+    })
+    .filter((c): c is NonNullable<typeof c> => !!c);
+
+  const selectedId = sp.lead ?? null;
+  const lead = selectedId
+    ? await db.lead.findFirst({
+        where: { id: selectedId, ...scope },
+        select: { id: true, name: true, phone: true, lastInboundAt: true, unreadMessages: true, status: true },
+      })
+    : null;
+  const messages = lead
+    ? (
+        await db.whatsAppMessage.findMany({
+          where: { leadId: lead.id },
+          orderBy: { createdAt: "desc" },
+          take: 200,
+          include: { user: { select: { name: true } } },
+        })
+      ).reverse()
+    : [];
+
+  return (
+    <InboxView
+      conversations={conversations}
+      lead={lead ? { id: lead.id, name: lead.name, phone: lead.phone, lastInboundAt: lead.lastInboundAt?.toISOString() ?? null, unread: lead.unreadMessages, status: lead.status } : null}
+      messages={messages.map((m) => ({
+        id: m.id,
+        body: m.body,
+        direction: m.direction,
+        status: m.status,
+        channel: m.channel,
+        error: m.error,
+        createdAt: m.createdAt.toISOString(),
+        userName: m.user?.name ?? null,
+      }))}
+      templates={templates}
+      apiEnabled={apiEnabled}
+      countryCode={countryCode}
+      company={company}
+      agentName={user.name}
+      q={sp.q ?? ""}
+    />
   );
 }

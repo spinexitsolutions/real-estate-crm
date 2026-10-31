@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Copy, Ellipsis, FileText, Pencil, Plus, Trash2 } from "lucide-react";
+import { BadgeCheck, Copy, Ellipsis, FileText, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,17 @@ import { Modal } from "@/components/ui/modal";
 import { TEMPLATE_CATEGORIES, TEMPLATE_VARIABLES, labelOf } from "@/lib/constants";
 import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { META_PARAM_KEYS, parseMetaParams } from "@/lib/whatsapp-window";
 import { createTemplate, deleteTemplate, updateTemplate } from "@/actions/whatsapp";
 
-type Template = { id: string; name: string; category: string; body: string; updatedAt: string };
+type Template = { id: string; name: string; category: string; body: string; updatedAt: string; metaName: string | null; metaLanguage: string; metaParams: string };
+
+const META_LANGUAGES = [
+  { value: "en", label: "English (en)" },
+  { value: "en_US", label: "English US (en_US)" },
+  { value: "en_GB", label: "English UK (en_GB)" },
+  { value: "hi", label: "Hindi (hi)" },
+];
 
 const CATEGORY_TONES: Record<string, string> = {
   GREETING: "bg-sky-50 text-sky-700 ring-sky-600/20",
@@ -91,8 +99,13 @@ export function TemplatesManager({ templates, canDelete }: { templates: Template
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-semibold text-slate-900">{t.name}</h3>
-                  <div className="mt-1.5">
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
                     <Badge className={CATEGORY_TONES[t.category] ?? CATEGORY_TONES.GENERAL}>{labelOf(TEMPLATE_CATEGORIES, t.category)}</Badge>
+                    {t.metaName && (
+                      <span title={`Meta template: ${t.metaName} (${t.metaLanguage})`} className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                        <BadgeCheck className="size-3.5" /> Approved template
+                      </span>
+                    )}
                   </div>
                 </div>
                 <Dropdown
@@ -144,7 +157,10 @@ export function TemplatesManager({ templates, canDelete }: { templates: Template
               <div className="mt-4 flex-1 rounded-lg bg-slate-50 p-3.5 text-[13px] leading-relaxed text-slate-600">
                 <HighlightedBody body={t.body} className="line-clamp-6" />
               </div>
-              <p className="mt-3 text-xs text-slate-400">Updated {formatRelative(t.updatedAt)}</p>
+              <p className="mt-3 truncate text-xs text-slate-400">
+                Updated {formatRelative(t.updatedAt)}
+                {t.metaName && <span className="font-mono"> - {t.metaName}</span>}
+              </p>
             </Card>
           ))}
         </div>
@@ -184,13 +200,19 @@ function TemplateModal({ open, onClose, template }: { open: boolean; onClose: ()
   const [body, setBody] = useState(template?.body ?? "");
   const [lastId, setLastId] = useState<string | undefined>(template?.id);
   const [wasOpen, setWasOpen] = useState(open);
+  const [params, setParams] = useState<string[]>(parseMetaParams(template?.metaParams));
+  const [metaName, setMetaName] = useState(template?.metaName ?? "");
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  // Reset body when the modal opens for a different template
+  // Reset fields when the modal opens for a different template
   if (open !== wasOpen || template?.id !== lastId) {
     setWasOpen(open);
     setLastId(template?.id);
-    if (open) setBody(template?.body ?? "");
+    if (open) {
+      setBody(template?.body ?? "");
+      setParams(parseMetaParams(template?.metaParams));
+      setMetaName(template?.metaName ?? "");
+    }
   }
 
   const insert = (key: string) => {
@@ -209,6 +231,7 @@ function TemplateModal({ open, onClose, template }: { open: boolean; onClose: ()
 
   const submit = (fd: FormData) => {
     fd.set("body", body);
+    fd.set("metaParams", params.join(","));
     start(async () => {
       const res = template ? await updateTemplate(template.id, fd) : await createTemplate(fd);
       if (res.error) return void toast.error(res.error);
@@ -261,6 +284,48 @@ function TemplateModal({ open, onClose, template }: { open: boolean; onClose: ()
               <span className="text-xs text-slate-400">{body.length} / 1024</span>
             </div>
             <textarea ref={ref} value={body} onChange={(e) => setBody(e.target.value)} rows={9} maxLength={1024} required className="input resize-y" placeholder="Hi {{name}}, ..." />
+          </div>
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center gap-2">
+              <BadgeCheck className="size-4 text-emerald-600" />
+              <p className="text-[13px] font-semibold text-slate-800">WhatsApp API approval (optional)</p>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              To message leads via the API outside the 24-hour window or in bulk, create the same template in Meta Business Manager and enter its exact name here once approved.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Field label="Meta template name">
+                <Input name="metaName" value={metaName} onChange={(e) => setMetaName(e.target.value)} placeholder="e.g. property_followup" className="font-mono text-[13px]" />
+              </Field>
+              <Field label="Language">
+                <Select name="metaLanguage" options={META_LANGUAGES} defaultValue={template?.metaLanguage ?? "en"} />
+              </Field>
+            </div>
+            {metaName && (
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Parameter order (fills {"{{1}}"}, {"{{2}}"}... in the approved template)</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {params.map((k, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2 py-1 text-[11.5px] font-medium text-brand-700 ring-1 ring-inset ring-brand-600/20">
+                      <span className="font-mono text-brand-400">{`{{${i + 1}}}`}</span> {k}
+                      <button type="button" onClick={() => setParams((p) => p.filter((_, j) => j !== i))} className="ml-0.5 text-brand-400 hover:text-brand-700" aria-label={`Remove ${k}`}>
+                        <X className="size-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {META_PARAM_KEYS.filter((k) => !params.includes(k)).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setParams((p) => [...p, k])}
+                      className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-[11.5px] font-medium text-slate-500 hover:border-brand-300 hover:text-brand-700"
+                    >
+                      + {k}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div>
             <p className="mb-1.5 text-xs font-medium text-slate-500">Insert variable</p>

@@ -5,18 +5,21 @@ import { db } from "@/lib/db";
 import { requireUser, isManager, leadScope } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { logActivity } from "@/lib/activity";
-import { sendViaCloudApi } from "@/lib/whatsapp";
+import { sendTemplateViaCloudApi, sendViaCloudApi } from "@/lib/whatsapp";
+import { isWindowOpen, parseMetaParams } from "@/lib/whatsapp-window";
 import type { ActionResult } from "@/lib/action";
 import { fillTemplate, normalizePhone, str, waLink } from "@/lib/utils";
 
-export async function getWhatsAppContext() {
+export async function getWhatsAppContext(leadId?: string) {
   const user = await requireUser();
-  const [settings, templates] = await Promise.all([
+  const [settings, templates, lead] = await Promise.all([
     getSettings(),
-    db.whatsAppTemplate.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, category: true, body: true } }),
+    db.whatsAppTemplate.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, category: true, body: true, metaName: true } }),
+    leadId ? db.lead.findFirst({ where: { id: leadId, ...leadScope(user) }, select: { lastInboundAt: true } }) : Promise.resolve(null),
   ]);
   return {
     templates,
+    lastInboundAt: lead?.lastInboundAt?.toISOString() ?? null,
     company: settings.companyName,
     agentName: user.name,
     apiEnabled: Boolean(settings.waApiEnabled && settings.waPhoneNumberId && settings.waAccessToken),
@@ -24,48 +27,89 @@ export async function getWhatsAppContext() {
   };
 }
 
+export type TemplateVars = { property?: string; price?: string; location?: string; date?: string };
+
+function resolveParams(keys: string[], vars: Record<string, string | undefined>) {
+  return keys.map((k) => vars[k] ?? "");
+}
+
 export async function sendWhatsApp({
   leadId,
   phone,
   body,
   channel,
+  templateId,
+  vars,
 }: {
   leadId?: string;
   phone: string;
   body: string;
   channel: "LINK" | "API";
+  /** Template used to compose the message. When it has an approved Meta name, the API sends it as a template. */
+  templateId?: string | null;
+  vars?: TemplateVars;
 }): Promise<ActionResult> {
   const user = await requireUser();
   if (!body.trim()) return { error: "Message cannot be empty." };
   if (!phone.trim()) return { error: "Phone number is missing." };
   const settings = await getSettings();
 
+  let lead: { id: string; name: string; lastInboundAt: Date | null } | null = null;
   if (leadId) {
-    const lead = await db.lead.findFirst({ where: { id: leadId, ...leadScope(user) }, select: { id: true } });
+    lead = await db.lead.findFirst({ where: { id: leadId, ...leadScope(user) }, select: { id: true, name: true, lastInboundAt: true } });
     if (!lead) return { error: "Lead not found or you do not have access." };
   }
 
   const to = normalizePhone(phone, settings.defaultCountryCode);
   let status = "SENT";
   let error: string | null = null;
+  let waMessageId: string | null = null;
 
   if (channel === "API") {
     if (!settings.waApiEnabled || !settings.waPhoneNumberId || !settings.waAccessToken) {
       return { error: "WhatsApp API is not configured. Set it up in Settings." };
     }
-    const res = await sendViaCloudApi({ phoneNumberId: settings.waPhoneNumberId, accessToken: settings.waAccessToken, to, body });
+    const template = templateId ? await db.whatsAppTemplate.findUnique({ where: { id: templateId } }) : null;
+    const windowOpen = isWindowOpen(lead?.lastInboundAt);
+    // Inside the 24h window the exact (possibly edited) text is sent; outside it, the approved template.
+    const useTemplate = !windowOpen && !!template?.metaName;
+
+    if (!windowOpen && !template?.metaName) {
+      return {
+        error:
+          "This customer has not messaged you in the last 24 hours, so WhatsApp only allows approved templates via the API. Pick a template marked 'Approved', or use 'Open in WhatsApp' instead.",
+      };
+    }
+
+    const res =
+      useTemplate && template?.metaName
+        ? await sendTemplateViaCloudApi({
+            phoneNumberId: settings.waPhoneNumberId,
+            accessToken: settings.waAccessToken,
+            to,
+            templateName: template.metaName,
+            language: template.metaLanguage,
+            params: resolveParams(parseMetaParams(template.metaParams), {
+              name: (lead?.name ?? "").split(" ")[0] || "there",
+              agent: user.name,
+              company: settings.companyName,
+              ...vars,
+            }),
+          })
+        : await sendViaCloudApi({ phoneNumberId: settings.waPhoneNumberId, accessToken: settings.waAccessToken, to, body });
     if (!res.ok) {
       status = "FAILED";
       error = res.error ?? "Unknown error";
     }
+    waMessageId = res.id ?? null;
   }
 
   await db.whatsAppMessage.create({
-    data: { phone: to, body, direction: "OUT", channel, status, error, leadId: leadId ?? null, userId: user.id },
+    data: { phone: to, body, direction: "OUT", channel, status, error, waMessageId, leadId: leadId ?? null, userId: user.id },
   });
 
   if (leadId && status === "SENT") {
-    await db.lead.update({ where: { id: leadId }, data: { lastContactedAt: new Date() } });
+    await db.lead.update({ where: { id: leadId }, data: { lastContactedAt: new Date(), unreadMessages: 0 } });
     await logActivity({
       type: "WHATSAPP",
       content: `WhatsApp message ${channel === "API" ? "sent via API" : "sent"}: ${body.length > 140 ? body.slice(0, 140) + "..." : body}`,
@@ -78,22 +122,40 @@ export async function sendWhatsApp({
   return { ok: true };
 }
 
+/** Marks a conversation as read (clears the unread badge). */
+export async function markConversationRead(leadId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  const res = await db.lead.updateMany({ where: { id: leadId, ...leadScope(user), unreadMessages: { gt: 0 } }, data: { unreadMessages: 0 } });
+  if (res.count) revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+function templateData(fd: FormData) {
+  const metaName = str(fd, "metaName").toLowerCase().replace(/[^a-z0-9_]/g, "_");
+  return {
+    name: str(fd, "name"),
+    body: str(fd, "body"),
+    category: str(fd, "category") || "GENERAL",
+    metaName: metaName || null,
+    metaLanguage: str(fd, "metaLanguage") || "en",
+    metaParams: parseMetaParams(str(fd, "metaParams")).join(","),
+  };
+}
+
 export async function createTemplate(fd: FormData): Promise<ActionResult> {
   await requireUser();
-  const name = str(fd, "name");
-  const body = str(fd, "body");
-  if (!name || !body) return { error: "Name and message are required." };
-  await db.whatsAppTemplate.create({ data: { name, body, category: str(fd, "category") || "GENERAL" } });
+  const data = templateData(fd);
+  if (!data.name || !data.body) return { error: "Name and message are required." };
+  await db.whatsAppTemplate.create({ data });
   revalidatePath("/whatsapp");
   return { ok: true };
 }
 
 export async function updateTemplate(id: string, fd: FormData): Promise<ActionResult> {
   await requireUser();
-  const name = str(fd, "name");
-  const body = str(fd, "body");
-  if (!name || !body) return { error: "Name and message are required." };
-  await db.whatsAppTemplate.update({ where: { id }, data: { name, body, category: str(fd, "category") || "GENERAL" } });
+  const data = templateData(fd);
+  if (!data.name || !data.body) return { error: "Name and message are required." };
+  await db.whatsAppTemplate.update({ where: { id }, data });
   revalidatePath("/whatsapp");
   return { ok: true };
 }
@@ -152,10 +214,11 @@ export async function broadcast({
   const { user, where } = await broadcastWhere(filters);
   const settings = await getSettings();
   let body = customBody?.trim() ?? "";
+  let template: Awaited<ReturnType<typeof db.whatsAppTemplate.findUnique>> = null;
   if (templateId) {
-    const t = await db.whatsAppTemplate.findUnique({ where: { id: templateId } });
-    if (!t) return { error: "Template not found." };
-    if (!body) body = t.body;
+    template = await db.whatsAppTemplate.findUnique({ where: { id: templateId } });
+    if (!template) return { error: "Template not found." };
+    if (!body) body = template.body;
   }
   if (!body) return { error: "Choose a template or write a message." };
 
@@ -172,15 +235,29 @@ export async function broadcast({
   if (!settings.waApiEnabled || !settings.waPhoneNumberId || !settings.waAccessToken) {
     return { error: "WhatsApp API is not configured. Set it up in Settings, or use click-to-send links." };
   }
+  if (!template?.metaName) {
+    return {
+      error:
+        "Bulk messages via the API must use a Meta-approved template (WhatsApp blocks free text to customers who have not messaged in the last 24 hours). Choose a template marked 'Approved', or use click-to-send links.",
+    };
+  }
+  const metaKeys = parseMetaParams(template.metaParams);
 
   let sent = 0;
   let failed = 0;
   for (const l of leads) {
     const text = fillTemplate(body, vars(l.name));
     const to = normalizePhone(l.phone, settings.defaultCountryCode);
-    const res = await sendViaCloudApi({ phoneNumberId: settings.waPhoneNumberId, accessToken: settings.waAccessToken, to, body: text });
+    const res = await sendTemplateViaCloudApi({
+      phoneNumberId: settings.waPhoneNumberId,
+      accessToken: settings.waAccessToken,
+      to,
+      templateName: template.metaName,
+      language: template.metaLanguage,
+      params: resolveParams(metaKeys, vars(l.name)),
+    });
     await db.whatsAppMessage.create({
-      data: { phone: to, body: text, channel: "API", status: res.ok ? "SENT" : "FAILED", error: res.error ?? null, leadId: l.id, userId: user.id },
+      data: { phone: to, body: text, channel: "API", status: res.ok ? "SENT" : "FAILED", error: res.error ?? null, waMessageId: res.id ?? null, leadId: l.id, userId: user.id },
     });
     if (res.ok) {
       sent++;

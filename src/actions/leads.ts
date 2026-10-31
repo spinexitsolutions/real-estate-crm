@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { isManager, requireUser, type CurrentUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
+import { notifyUser } from "@/lib/notify";
 import type { ActionResult } from "@/lib/action";
 import { labelOf, LEAD_SOURCES, LEAD_STATUSES } from "@/lib/constants";
 import { optInt, optNum, optStr, parseCsv, str } from "@/lib/utils";
@@ -68,6 +69,7 @@ export async function createLead(fd: FormData): Promise<ActionResult<{ id: strin
   if (assignedToId && assignedToId !== user.id) {
     const a = await db.user.findUnique({ where: { id: assignedToId }, select: { name: true } });
     await logActivity({ type: "ASSIGNED", content: `Assigned to ${a?.name ?? "agent"}`, leadId: lead.id, userId: user.id });
+    await notifyUser(assignedToId, { title: `New lead assigned: ${lead.name}`, body: `${lead.phone} - assigned by ${user.name}`, url: `/leads/${lead.id}`, tag: `lead-${lead.id}` });
   }
   revalidatePath("/", "layout");
   return { ok: true, data: { id: lead.id } };
@@ -90,6 +92,9 @@ export async function updateLead(id: string, fd: FormData): Promise<ActionResult
   if (lead.assignedToId !== assignedToId) {
     const a = assignedToId ? await db.user.findUnique({ where: { id: assignedToId }, select: { name: true } }) : null;
     await logActivity({ type: "ASSIGNED", content: a ? `Reassigned to ${a.name}` : "Unassigned", leadId: id, userId: user.id });
+    if (assignedToId && assignedToId !== user.id) {
+      await notifyUser(assignedToId, { title: `New lead assigned: ${data.name}`, body: `${data.phone} - assigned by ${user.name}`, url: `/leads/${id}`, tag: `lead-${id}` });
+    }
   }
   revalidatePath("/", "layout");
   return { ok: true };
@@ -119,8 +124,11 @@ export async function assignLead(id: string, userId: string | null): Promise<Act
   const user = await requireUser();
   if (!isManager(user)) return { error: "Only managers can reassign leads." };
   const target = userId ? await db.user.findUnique({ where: { id: userId }, select: { name: true } }) : null;
-  await db.lead.update({ where: { id }, data: { assignedToId: userId } });
+  const updated = await db.lead.update({ where: { id }, data: { assignedToId: userId } });
   await logActivity({ type: "ASSIGNED", content: target ? `Assigned to ${target.name}` : "Unassigned", leadId: id, userId: user.id });
+  if (userId && userId !== user.id) {
+    await notifyUser(userId, { title: `New lead assigned: ${updated.name}`, body: `${updated.phone} - assigned by ${user.name}`, url: `/leads/${id}`, tag: `lead-${id}` });
+  }
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -158,6 +166,9 @@ export async function bulkLeadAction(
     count = (await db.lead.updateMany({ where, data: { assignedToId: action.value } })).count;
     const target = action.value ? await db.user.findUnique({ where: { id: action.value }, select: { name: true } }) : null;
     await db.activity.createMany({ data: ids.map((leadId) => ({ type: "ASSIGNED", content: target ? `Assigned to ${target.name} (bulk)` : "Unassigned (bulk)", leadId, userId: user.id })) });
+    if (action.value && action.value !== user.id && count > 0) {
+      await notifyUser(action.value, { title: `${count} lead${count > 1 ? "s" : ""} assigned to you`, body: `Assigned by ${user.name}`, url: "/leads", tag: "bulk-assign" });
+    }
   }
   revalidatePath("/", "layout");
   return { ok: true, data: { count } };
@@ -264,6 +275,9 @@ export async function importLeads(csv: string, assignToId: string | null): Promi
     });
     await logActivity({ type: "CREATED", content: "Lead imported from CSV", leadId: lead.id, userId: user.id });
     created++;
+  }
+  if (owner && owner !== user.id && created > 0) {
+    await notifyUser(owner, { title: `${created} imported lead${created > 1 ? "s" : ""} assigned to you`, body: `Imported by ${user.name}`, url: "/leads", tag: "import-assign" });
   }
   revalidatePath("/", "layout");
   return { ok: true, data: { created, skipped } };

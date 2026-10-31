@@ -6,17 +6,22 @@ import { formatDate } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { PageHeader } from "@/components/ui/card";
 import { ProfileForms } from "./profile-forms";
+import { NotificationPrefs } from "./notification-prefs";
+import { getSettings } from "@/lib/settings";
+import { isEmailConfigured } from "@/lib/email";
+import { isPushConfigured } from "@/lib/push";
 
 export const metadata = { title: "My profile" };
 
 export default async function ProfilePage() {
   const user = await requireUser();
   const [record, openLeads, pending, won] = await Promise.all([
-    db.user.findUnique({ where: { id: user.id }, select: { createdAt: true } }),
+    db.user.findUnique({ where: { id: user.id }, select: { createdAt: true, notifyEmail: true, notifyPush: true, notifyWhatsApp: true } }),
     db.lead.count({ where: { assignedToId: user.id, status: { in: OPEN_LEAD_STATUSES } } }),
     db.followUp.count({ where: { assignedToId: user.id, status: "PENDING" } }),
     db.deal.count({ where: { agentId: user.id, stage: "WON" } }),
   ]);
+  const settings = await getSettings();
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader title="My profile" description="Your personal details and security" icon={UserCog} />
@@ -43,6 +48,15 @@ export default async function ProfilePage() {
         </div>
       </div>
       <ProfileForms name={user.name} phone={user.phone ?? ""} email={user.email} />
+      <NotificationPrefs
+        initial={{ notifyEmail: record?.notifyEmail ?? true, notifyPush: record?.notifyPush ?? true, notifyWhatsApp: record?.notifyWhatsApp ?? false }}
+        channels={{
+          email: isEmailConfigured() && settings.emailDigestEnabled,
+          push: isPushConfigured() && settings.pushEnabled,
+          whatsapp: !!(settings.waApiEnabled && settings.waDigestTemplate),
+          hasPhone: !!user.phone,
+        }}
+      />
     </div>
   );
 }

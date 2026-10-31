@@ -25,6 +25,8 @@ import { formatDueLabel } from "@/lib/format";
 import { labelOf, FOLLOWUP_TYPES, ROLES } from "@/lib/constants";
 import { MobileSidebar, SidebarContent } from "./sidebar";
 import { CommandPalette } from "./command-palette";
+import { PushPrompt } from "@/components/notifications/push-toggle";
+import { ReminderPoller } from "@/components/notifications/reminder-poller";
 
 export type ShellNotification = {
   id: string;
@@ -41,12 +43,14 @@ export function AppShell({
   company,
   notifications,
   followupCount,
+  whatsappUnread = 0,
   children,
 }: {
   user: { name: string; email: string; role: string };
   company: string;
   notifications: ShellNotification[];
   followupCount: number;
+  whatsappUnread?: number;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -56,11 +60,11 @@ export function AppShell({
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">
         <Suspense>
-          <SidebarContent role={user.role} company={company} followupCount={followupCount} />
+          <SidebarContent role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} />
         </Suspense>
       </aside>
       <Suspense>
-        <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} role={user.role} company={company} followupCount={followupCount} />
+        <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} />
       </Suspense>
 
       <div className="lg:pl-64">
@@ -111,6 +115,7 @@ export function AppShell({
                     <p className="text-sm font-semibold text-slate-900">Reminders</p>
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{followupCount} due</span>
                   </div>
+                  <PushPrompt />
                   <div className="max-h-80 overflow-y-auto p-1">
                     {notifications.length === 0 ? (
                       <p className="px-4 py-8 text-center text-sm text-slate-500">You are all caught up.</p>
@@ -176,6 +181,7 @@ export function AppShell({
       </div>
 
       <CommandPalette open={paletteOpen} setOpen={setPaletteOpen} />
+      <ReminderPoller />
     </div>
   );
 }

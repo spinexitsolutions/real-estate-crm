@@ -51,7 +51,12 @@ export async function saveWhatsApp(fd: FormData): Promise<ActionResult> {
   if (waApiEnabled && (!waPhoneNumberId || !waAccessToken)) {
     return { error: "Phone number ID and access token are required to enable the API." };
   }
-  await upsert({ waApiEnabled, waPhoneNumberId, waAccessToken });
+  const waVerifyToken = optStr(fd, "waVerifyToken");
+  if (waVerifyToken && waVerifyToken.length < 8) return { error: "Verify token should be at least 8 characters." };
+  const secretInput = str(fd, "waAppSecret");
+  const waAppSecret = secretInput || current?.waAppSecret || null;
+  const waDigestTemplate = optStr(fd, "waDigestTemplate")?.toLowerCase().replace(/[^a-z0-9_]/g, "_") ?? null;
+  await upsert({ waApiEnabled, waPhoneNumberId, waAccessToken, waVerifyToken, waAppSecret, waDigestTemplate });
   return { ok: true };
 }
 
