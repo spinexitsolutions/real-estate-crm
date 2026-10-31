@@ -6,14 +6,15 @@ import { db } from "@/lib/db";
 import { requireUser, isManager } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import type { ActionResult } from "@/lib/action";
-import { optInt, optNum, optStr, str } from "@/lib/utils";
+import { optInt, optNum, optStr, parseImages, str } from "@/lib/utils";
 import { labelOf, PROPERTY_STATUSES } from "@/lib/constants";
+import { deleteImages } from "@/lib/storage";
 
 function readProperty(fd: FormData) {
   const images = fd
     .getAll("images")
     .map((v) => (typeof v === "string" ? v.trim() : ""))
-    .filter((v) => /^https?:\/\//i.test(v));
+    .filter((v) => /^https?:\/\//i.test(v) || v.startsWith("/uploads/"));
   const amenities = fd
     .getAll("amenities")
     .map((v) => (typeof v === "string" ? v.trim() : ""))
@@ -75,6 +76,9 @@ export async function updateProperty(id: string, fd: FormData): Promise<ActionRe
   if (!data.city) return { error: "City is required." };
   if (data.price === null || data.price <= 0) return { error: "Please enter a valid price." };
   await db.property.update({ where: { id }, data: { ...data, price: data.price } });
+  const kept = new Set(parseImages(data.images));
+  const removed = parseImages(existing.images).filter((u) => !kept.has(u));
+  if (removed.length) await deleteImages(removed);
   if (existing.status !== data.status) {
     await logActivity({ type: "STATUS", content: `Status changed to ${labelOf(PROPERTY_STATUSES, data.status)}`, propertyId: id, userId: user.id });
   } else {
@@ -108,7 +112,8 @@ export async function deleteProperty(id: string): Promise<ActionResult> {
     const p = await db.property.findUnique({ where: { id }, select: { agentId: true } });
     if (p?.agentId !== user.id) return { error: "Only managers or the listing agent can delete this property." };
   }
-  await db.property.delete({ where: { id } });
+  const deleted = await db.property.delete({ where: { id } });
+  await deleteImages(parseImages(deleted.images));
   revalidatePath("/", "layout");
   redirect("/properties");
 }

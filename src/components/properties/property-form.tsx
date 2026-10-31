@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ImagePlus, Image as ImageIcon, Star, Trash2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { createProperty, updateProperty } from "@/actions/properties";
 import { Button, LinkButton } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { AMENITIES, FURNISHING, LISTING_TYPES, PROPERTY_STATUSES, PROPERTY_TYPES } from "@/lib/constants";
 import { formatCompact } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PhotoManager } from "./photo-manager";
 
 export type PropertyFormValues = {
   id: string;
@@ -57,33 +58,22 @@ export function PropertyForm({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [images, setImages] = useState<string[]>(property?.images ?? []);
-  const [imageUrl, setImageUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [amenities, setAmenities] = useState<string[]>(property?.amenities ?? []);
   const [price, setPrice] = useState(property?.price ? String(property.price) : "");
   const [listingType, setListingType] = useState(property?.listingType ?? "SALE");
   const [type, setType] = useState(property?.type ?? "APARTMENT");
-  const [broken, setBroken] = useState<Record<string, boolean>>({});
 
   const residential = !["PLOT", "OFFICE", "SHOP", "WAREHOUSE"].includes(type);
   const priceNum = Number(price.replace(/,/g, ""));
 
-  const addImage = () => {
-    const url = imageUrl.trim();
-    if (!/^https?:\/\//i.test(url)) {
-      toast.error("Please enter a valid image URL starting with http:// or https://");
-      return;
-    }
-    if (images.includes(url)) {
-      toast.error("This image is already added.");
-      return;
-    }
-    setImages((i) => [...i, url]);
-    setImageUrl("");
-  };
-
   const toggleAmenity = (a: string) => setAmenities((list) => (list.includes(a) ? list.filter((x) => x !== a) : [...list, a]));
 
   const onSubmit = (fd: FormData) => {
+    if (uploading) {
+      toast.error("Please wait for photo uploads to finish.");
+      return;
+    }
     fd.delete("images");
     images.forEach((i) => fd.append("images", i));
     fd.delete("amenities");
@@ -207,64 +197,9 @@ export function PropertyForm({
         </Card>
 
         <Card>
-          <CardHeader title="Photos" description="Paste image links. The first photo is used as the cover." />
+          <CardHeader title="Photos" description="Upload photos or add image links. The first photo is used as the cover." />
           <div className="p-5">
-            <div className="flex gap-2">
-              <Input
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addImage();
-                  }
-                }}
-                placeholder="https://example.com/photo.jpg"
-              />
-              <Button variant="secondary" onClick={addImage}>
-                <ImagePlus /> Add
-              </Button>
-            </div>
-            {images.length === 0 ? (
-              <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 py-10 text-center">
-                <ImageIcon className="size-8 text-slate-300" />
-                <p className="mt-2 text-sm text-slate-500">No photos added yet</p>
-              </div>
-            ) : (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {images.map((src, i) => (
-                  <div key={src} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                    {broken[src] ? (
-                      <div className="flex h-full items-center justify-center text-xs text-slate-400">Preview unavailable</div>
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={src} alt="" className="h-full w-full object-cover" onError={() => setBroken((b) => ({ ...b, [src]: true }))} />
-                    )}
-                    {i === 0 && <span className="absolute left-2 top-2 rounded-md bg-slate-900/70 px-1.5 py-0.5 text-[11px] font-medium text-white">Cover</span>}
-                    <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition group-hover:opacity-100">
-                      {i > 0 && (
-                        <button
-                          type="button"
-                          title="Make cover"
-                          onClick={() => setImages((list) => [src, ...list.filter((x) => x !== src)])}
-                          className="rounded-md bg-white/90 p-1.5 text-slate-700 shadow-xs hover:bg-white"
-                        >
-                          <Star className="size-3.5" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        title="Remove"
-                        onClick={() => setImages((list) => list.filter((x) => x !== src))}
-                        className="rounded-md bg-white/90 p-1.5 text-rose-600 shadow-xs hover:bg-white"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <PhotoManager images={images} onChange={setImages} onBusyChange={setUploading} />
           </div>
         </Card>
       </div>
