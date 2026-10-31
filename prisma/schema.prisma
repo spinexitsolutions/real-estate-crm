@@ -676,3 +676,18 @@ model Invoice {
 
   @@index([organizationId])
 }
+
+/// Platform-level audit trail of super admin actions (plan changes, suspensions, impersonation...).
+model AdminAuditLog {
+  id             String   @id @default(cuid())
+  actorId        String?
+  actorEmail     String
+  action         String   // e.g. ORG_SUSPENDED, PLAN_CHANGED, IMPERSONATION_STARTED
+  organizationId String?
+  details        String?  // JSON
+  ip             String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([createdAt])
+}

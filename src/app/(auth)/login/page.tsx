@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 import { CircleCheck } from "lucide-react";
 import { LoginForm } from "./login-form";
 
@@ -18,7 +19,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       )}
       <LoginForm next={next ?? ""} />
       <p className="mt-6 text-center text-sm text-slate-500">
-        New to EstateDesk?{" "}
+        New to {BRAND.name}?{" "}
         <Link href="/signup" className="font-medium text-brand-600 hover:text-brand-700">
           Start your free trial
         </Link>

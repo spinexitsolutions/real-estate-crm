@@ -1,5 +1,7 @@
 import { Building2, CalendarClock, ChartColumn, MessageCircle } from "lucide-react";
+import Link from "next/link";
 import { LogoMark } from "@/components/ui/icons";
+import { BRAND } from "@/lib/brand";
 
 const points = [
   { icon: Building2, title: "Leads and inventory in one place", text: "Track every enquiry and match it with the right property." },
@@ -13,10 +15,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="grid min-h-screen lg:grid-cols-[1fr_1.05fr]">
       <div className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-20">
         <div className="mx-auto w-full max-w-sm">
-          <div className="mb-10 flex items-center gap-2.5">
+          <Link href="/" className="mb-10 flex items-center gap-2.5">
             <LogoMark className="size-9" />
-            <span className="text-lg font-semibold tracking-tight text-slate-900">EstateDesk</span>
-          </div>
+            <span className="text-lg font-semibold tracking-tight text-slate-900">{BRAND.name}</span>
+          </Link>
           {children}
         </div>
       </div>
