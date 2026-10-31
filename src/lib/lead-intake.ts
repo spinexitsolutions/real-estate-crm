@@ -69,7 +69,7 @@ export async function intakeLead(input: IntakeInput): Promise<IntakeResult> {
   const digits = rawPhone.replace(/\D/g, "");
   if (!name || digits.length < 7) return { ok: false, error: "A name and a valid phone number are required" };
 
-  const settings = await db.settings.findUnique({ where: { id: 1 } });
+  const settings = await db.settings.findFirst();
   const source = LEAD_SOURCES.some((s) => s.value === input.source) ? input.source : "OTHER";
   const via = input.channelLabel || labelOf(LEAD_SOURCES, source);
   const message = (input.message || "").trim().slice(0, 2000) || null;

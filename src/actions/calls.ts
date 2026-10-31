@@ -38,7 +38,7 @@ export async function clickToCall(leadId: string): Promise<ActionResult<{ provid
   if (!user.phone || user.phone.replace(/\D/g, "").length < 10) {
     return { error: "Add your mobile number in My Profile first. The call rings your phone, then connects the customer." };
   }
-  const settings = await db.settings.findUnique({ where: { id: 1 } });
+  const settings = await db.settings.findFirst();
   const status = telephonyStatus(settings);
   if (!status.enabled) return { error: status.reason ?? "Click-to-call is not configured." };
 

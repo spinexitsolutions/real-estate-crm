@@ -2,9 +2,9 @@
 
 import { headers } from "next/headers";
 import { subMinutes } from "date-fns";
-import { db } from "@/lib/db";
+import { db, rawDb, runAsTenant } from "@/lib/db";
 import { intakeLead } from "@/lib/lead-intake";
-import { publicWhere } from "@/lib/site";
+import { publicWhere, resolveSiteOrg } from "@/lib/site";
 import { formatDate } from "@/lib/format";
 import { str } from "@/lib/utils";
 
@@ -19,11 +19,17 @@ async function clientIp() {
 }
 
 /** Website enquiry form: creates (or updates) a lead in the CRM, auto-assigned with a call reminder. */
-export async function submitEnquiry(_: EnquiryState, fd: FormData): Promise<EnquiryState> {
+export async function submitEnquiry(state: EnquiryState, fd: FormData): Promise<EnquiryState> {
+  const orgId = await resolveSiteOrg(str(fd, "site"));
+  if (!orgId) return { error: "This website is not available." };
+  return runAsTenant(orgId, () => submitEnquiryInSite(state, fd));
+}
+
+async function submitEnquiryInSite(_: EnquiryState, fd: FormData): Promise<EnquiryState> {
   // Honeypot: real people never fill this hidden field
   if (str(fd, "company_website")) return { ok: true };
 
-  const settings = await db.settings.findUnique({ where: { id: 1 }, select: { websiteEnabled: true } });
+  const settings = await db.settings.findFirst({ select: { websiteEnabled: true } });
   if (!settings?.websiteEnabled) return { error: "Enquiries are not being accepted right now." };
 
   const name = str(fd, "name").slice(0, 120);
@@ -40,9 +46,9 @@ export async function submitEnquiry(_: EnquiryState, fd: FormData): Promise<Enqu
 
   const ip = await clientIp();
   const key = `enquiry:${ip}`;
-  const recent = await db.loginAttempt.count({ where: { key, createdAt: { gte: subMinutes(new Date(), WINDOW_MIN) } } });
+  const recent = await rawDb.loginAttempt.count({ where: { key, createdAt: { gte: subMinutes(new Date(), WINDOW_MIN) } } });
   if (recent >= MAX_PER_WINDOW) return { error: "Too many enquiries from this device. Please try again in a few minutes or call us." };
-  await db.loginAttempt.create({ data: { key, success: true } });
+  await rawDb.loginAttempt.create({ data: { key, success: true } });
 
   let property: { id: string; code: string; title: string; listingType: string; type: string; bedrooms: number | null; city: string; locality: string | null; price: number } | null = null;
   if (propertyId) {

@@ -39,6 +39,7 @@ type S = {
   waVerifyToken: string;
   hasAppSecret: boolean;
   waDigestTemplate: string;
+  orgId: string;
 };
 
 const CURRENCIES = [
@@ -294,7 +295,7 @@ export function SettingsForms({ settings: s, origin }: { settings: S; origin: st
             </p>
             <div className="mt-4 space-y-4">
               <Field label="Callback URL">
-                <CopyField value={`${origin}/api/webhooks/whatsapp`} label="WhatsApp callback URL" />
+                <CopyField value={`${origin}/api/webhooks/whatsapp?org=${s.orgId}`} label="WhatsApp callback URL" />
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Verify token" hint="Paste the same value in Meta when adding the callback URL.">

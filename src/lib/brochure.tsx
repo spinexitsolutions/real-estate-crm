@@ -89,7 +89,7 @@ function dataUri(img: Img) {
 export async function getBrochureData(propertyId: string) {
   const [property, settings] = await Promise.all([
     db.property.findUnique({ where: { id: propertyId }, include: { agent: { select: { name: true, phone: true, email: true } } } }),
-    db.settings.findUnique({ where: { id: 1 } }),
+    db.settings.findFirst(),
   ]);
   if (!property || !settings) return null;
   return { property, settings };

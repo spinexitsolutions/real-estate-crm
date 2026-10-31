@@ -16,7 +16,8 @@
     "setup:empty": "prisma db push && tsx scripts/secure-db.ts",
     "postinstall": "prisma generate",
     "vapid": "node scripts/generate-vapid.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:isolation": "tsx scripts/check-isolation.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

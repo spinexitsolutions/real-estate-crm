@@ -1,3 +1,5 @@
+import { runAsTenant } from "@/lib/db";
+import { orgFromTelephonyKey } from "@/lib/webhook-tenant";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { processTelephonyCallback, type TelephonyPayload } from "@/lib/telephony-webhook";
@@ -36,7 +38,7 @@ async function handle(req: Request, { params }: { params: Promise<{ provider: st
   if (provider !== "EXOTEL" && provider !== "KNOWLARITY") return NextResponse.json({ ok: false, error: "Unknown provider" }, { status: 404 });
 
   const key = new URL(req.url).searchParams.get("key") ?? req.headers.get("x-api-key") ?? "";
-  const settings = await db.settings.findUnique({ where: { id: 1 }, select: { telephonyWebhookKey: true } });
+  const settings = await db.settings.findFirst({ select: { telephonyWebhookKey: true } });
   if (!settings?.telephonyWebhookKey || key !== settings.telephonyWebhookKey) {
     return NextResponse.json({ ok: false, error: "Invalid or missing key" }, { status: 401 });
   }
@@ -55,5 +57,11 @@ async function handle(req: Request, { params }: { params: Promise<{ provider: st
   }
 }
 
-export const GET = handle;
-export const POST = handle;
+async function tenantHandle(req: Request, ctx: { params: Promise<{ provider: string }> }) {
+  const orgId = await orgFromTelephonyKey(req);
+  if (!orgId) return NextResponse.json({ ok: false, error: "Invalid or missing key" }, { status: 401 });
+  return runAsTenant(orgId, () => handle(req, ctx));
+}
+
+export const GET = tenantHandle;
+export const POST = tenantHandle;

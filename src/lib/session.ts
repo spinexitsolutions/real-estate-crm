@@ -3,7 +3,14 @@ import { SignJWT, jwtVerify } from "jose";
 export const SESSION_COOKIE = "ed_session";
 const SESSION_DAYS = 7;
 
-export type SessionPayload = { userId: string; role: string; name: string };
+export type SessionPayload = {
+  userId: string;
+  orgId: string;
+  role: string;
+  name: string;
+  /** Set when a platform super admin is viewing an organization as one of its users */
+  impersonatorId?: string;
+};
 
 function key() {
   const secret = process.env.AUTH_SECRET || "estatedesk-dev-secret-change-me";

@@ -53,7 +53,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
 
   const todayScope: Prisma.CallLogWhereInput = { ...scope, startedAt: { gte: startOfDay(new Date()) } };
   const [settings, users, total, calls, todayCount, rangeTotal, answered, talk, missedIn] = await Promise.all([
-    db.settings.findUnique({ where: { id: 1 } }),
+    db.settings.findFirst(),
     manager ? db.user.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
     db.callLog.count({ where }),
     db.callLog.findMany({

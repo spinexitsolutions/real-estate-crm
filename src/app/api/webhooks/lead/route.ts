@@ -1,3 +1,5 @@
+import { runAsTenant } from "@/lib/db";
+import { orgFromLeadKey } from "@/lib/webhook-tenant";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { LEAD_SOURCES } from "@/lib/constants";
@@ -41,9 +43,9 @@ async function readBody(req: Request): Promise<Record<string, string>> {
   }
 }
 
-export async function POST(req: Request) {
+async function POSTInTenant(req: Request) {
   const key = new URL(req.url).searchParams.get("key") ?? req.headers.get("x-api-key") ?? "";
-  const settings = await db.settings.findUnique({ where: { id: 1 } });
+  const settings = await db.settings.findFirst();
   if (!settings?.leadWebhookKey || key !== settings.leadWebhookKey) {
     return json({ ok: false, error: "Invalid or missing API key" }, 401);
   }
@@ -61,4 +63,10 @@ export async function POST(req: Request) {
   });
   if (!res.ok) return json({ ok: false, error: "Fields 'name' and a valid 'phone' are required" }, 422);
   return json({ ok: true, leadId: res.leadId, ...(res.duplicate ? { duplicate: true } : {}) }, res.duplicate ? 200 : 201);
+}
+
+export async function POST(req: Request) {
+  const orgId = await orgFromLeadKey(req);
+  if (!orgId) return Response.json({ ok: false, error: "Invalid or missing key" }, { status: 401 });
+  return runAsTenant(orgId, () => POSTInTenant(req));
 }

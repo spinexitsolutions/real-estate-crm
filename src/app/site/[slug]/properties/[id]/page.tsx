@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Bath, BedDouble, Building2, Check, Download, Layers, MapPin, Maximize, Phone, Sofa, Tag } from "lucide-react";
 import { db } from "@/lib/db";
 import { getSite, publicSelect, publicWhere } from "@/lib/site";
+import { siteSlug, withSite } from "@/lib/site";
 import { FURNISHING, LISTING_TYPES, PROPERTY_TYPES, labelOf } from "@/lib/constants";
 import { formatCompact, formatCurrency } from "@/lib/format";
 import { parseImages, splitList, waLink } from "@/lib/utils";
@@ -15,7 +16,9 @@ async function getProperty(id: string) {
   return db.property.findFirst({ where: { id, ...publicWhere }, select: publicSelect });
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+async function generateMetadataInSite({ params }: { params: Promise<{ id: string }> }) {
+  const slug = siteSlug();
+  void slug;
   const { id } = await params;
   const [p, site] = await Promise.all([getProperty(id), getSite()]);
   if (!p || !site.enabled) return { title: "Property not found" };
@@ -30,7 +33,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function SitePropertyPage({ params }: { params: Promise<{ id: string }> }) {
+async function SitePropertyPageInSite({ params }: { params: Promise<{ id: string }> }) {
+  const slug = siteSlug();
+  void slug;
   const { id } = await params;
   const site = await getSite();
   if (!site.enabled) return null;
@@ -65,7 +70,7 @@ export default async function SitePropertyPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
-      <Link href="/site/properties" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800">
+      <Link href={`/site/${slug}/properties`} className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800">
         <ArrowLeft className="size-4" /> All properties
       </Link>
 
@@ -153,7 +158,7 @@ export default async function SitePropertyPage({ params }: { params: Promise<{ i
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
             <p className="text-lg font-semibold">Interested in this property?</p>
             <p className="mb-5 mt-1 text-sm text-slate-500">Get the best price, floor plans and a site visit.</p>
-            <EnquiryForm propertyId={p.id} defaultMessage={`I am interested in ${p.title}. Please call me.`} />
+            <EnquiryForm slug={slug} propertyId={p.id} defaultMessage={`I am interested in ${p.title}. Please call me.`} />
           </div>
           <div className="rounded-2xl border border-slate-200 p-5">
             <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Your property advisor</p>
@@ -183,11 +188,23 @@ export default async function SitePropertyPage({ params }: { params: Promise<{ i
           <h2 className="text-2xl font-semibold tracking-tight">Similar properties</h2>
           <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {similar.map((s) => (
-              <ListingCard key={s.id} p={s} currency={site.currency} />
+              <ListingCard key={s.id} slug={slug} p={s} currency={site.currency} />
             ))}
           </div>
         </section>
       )}
     </div>
   );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function generateMetadata(props: any) {
+  const { slug } = await props.params;
+  return withSite(slug, () => generateMetadataInSite(props));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default async function SitePropertyPage(props: any) {
+  const { slug } = await props.params;
+  return withSite(slug, () => SitePropertyPageInSite(props));
 }

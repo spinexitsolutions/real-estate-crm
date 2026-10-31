@@ -1,3 +1,5 @@
+import { runAsTenant } from "@/lib/db";
+import { orgFromLeadKey } from "@/lib/webhook-tenant";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { extractLeadList, isPortalKey, normalizePortalLead } from "@/lib/portal-normalize";
@@ -20,12 +22,12 @@ export function OPTIONS() {
 
 async function authorized(req: Request) {
   const key = new URL(req.url).searchParams.get("key") ?? req.headers.get("x-api-key") ?? "";
-  const settings = await db.settings.findUnique({ where: { id: 1 }, select: { leadWebhookKey: true } });
+  const settings = await db.settings.findFirst({ select: { leadWebhookKey: true } });
   return !!settings?.leadWebhookKey && key === settings.leadWebhookKey;
 }
 
 /** Some portals test the URL with a GET before enabling pushes. */
-export async function GET(req: Request, { params }: { params: Promise<{ portal: string }> }) {
+async function GETInTenant(req: Request, { params }: { params: Promise<{ portal: string }> }) {
   const { portal } = await params;
   if (!isPortalKey(portal)) return NextResponse.json({ ok: false, error: "Unknown portal" }, { status: 404, headers: CORS });
   if (!(await authorized(req))) return NextResponse.json({ ok: false, error: "Invalid or missing API key" }, { status: 401, headers: CORS });
@@ -56,7 +58,7 @@ async function readBody(req: Request): Promise<unknown> {
   return Object.fromEntries(new URLSearchParams(raw));
 }
 
-export async function POST(req: Request, { params }: { params: Promise<{ portal: string }> }) {
+async function POSTInTenant(req: Request, { params }: { params: Promise<{ portal: string }> }) {
   const { portal } = await params;
   if (!isPortalKey(portal)) return NextResponse.json({ ok: false, error: "Unknown portal" }, { status: 404, headers: CORS });
   if (!(await authorized(req))) return NextResponse.json({ ok: false, error: "Invalid or missing API key" }, { status: 401, headers: CORS });
@@ -84,4 +86,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ portal:
   const status = okCount === 0 ? 422 : 200;
   if (results.length === 1) return NextResponse.json(results[0], { status, headers: CORS });
   return NextResponse.json({ ok: okCount > 0, received: results.length, saved: okCount, results }, { status, headers: CORS });
+}
+
+export async function GET(req: Request, ctx: { params: Promise<{ portal: string }> }) {
+  const orgId = await orgFromLeadKey(req);
+  if (!orgId) return Response.json({ ok: false, error: "Invalid or missing key" }, { status: 401 });
+  return runAsTenant(orgId, () => GETInTenant(req, ctx));
+}
+
+export async function POST(req: Request, ctx: { params: Promise<{ portal: string }> }) {
+  const orgId = await orgFromLeadKey(req);
+  if (!orgId) return Response.json({ ok: false, error: "Invalid or missing key" }, { status: 401 });
+  return runAsTenant(orgId, () => POSTInTenant(req, ctx));
 }

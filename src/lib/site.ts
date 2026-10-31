@@ -1,7 +1,38 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { cache } from "react";
+import { notFound } from "next/navigation";
 import type { Prisma } from "@prisma/client";
-import { db } from "./db";
+import { db, rawDb, runAsTenant } from "./db";
+
+/* ------------------------------------------------------------------ multi-tenant routing
+ * Every company's public website lives at /site/<organization slug>. Pages resolve the
+ * organization from the slug and render inside runAsTenant(), so all queries are scoped. */
+
+const siteStore = new AsyncLocalStorage<{ slug: string }>();
+
+export async function resolveSiteOrg(slug: string) {
+  const org = await rawDb.organization.findUnique({ where: { slug }, select: { id: true, status: true } });
+  return org && org.status !== "SUSPENDED" ? org.id : null;
+}
+
+/** Runs `fn` scoped to the company that owns `slug` (404 when unknown). */
+export async function withSite<T>(slug: string, fn: () => Promise<T>): Promise<T> {
+  const orgId = await resolveSiteOrg(slug);
+  if (!orgId) notFound();
+  return siteStore.run({ slug }, () => runAsTenant(orgId, fn)) as Promise<T>;
+}
+
+/** Slug of the site being rendered (only inside withSite). */
+export function siteSlug() {
+  const s = siteStore.getStore();
+  if (!s) throw new Error("siteSlug() called outside withSite()");
+  return s.slug;
+}
+
+export function sitePath(slug: string, path = "") {
+  return `/site/${slug}${path}`;
+}
 
 /** Only these statuses are ever shown on the public website. */
 export const PUBLIC_STATUSES = ["AVAILABLE", "RESERVED"];
@@ -37,7 +68,7 @@ export const publicSelect = {
 export type PublicProperty = Prisma.PropertyGetPayload<{ select: typeof publicSelect }>;
 
 export const getSite = cache(async () => {
-  const s = await db.settings.findUnique({ where: { id: 1 } });
+  const s = await db.settings.findFirst();
   return {
     enabled: !!s?.websiteEnabled,
     companyName: s?.companyName ?? "Our Realty",

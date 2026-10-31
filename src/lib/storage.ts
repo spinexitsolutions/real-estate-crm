@@ -1,4 +1,5 @@
 import "server-only";
+import { currentOrgId } from "./db";
 import { randomBytes } from "crypto";
 import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
@@ -51,7 +52,8 @@ export async function uploadImage(bytes: Buffer, mime: string): Promise<UploadRe
   const ext = EXT[mime];
   if (!ext) return { error: "Unsupported image type." };
   const now = new Date();
-  const key = `properties/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${Date.now().toString(36)}-${randomBytes(6).toString("hex")}.${ext}`;
+  const org = (await currentOrgId()) ?? "shared"; // keep every company's files in its own folder
+  const key = `${org}/properties/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${Date.now().toString(36)}-${randomBytes(6).toString("hex")}.${ext}`;
 
   if (isSupabaseStorageConfigured()) {
     try {

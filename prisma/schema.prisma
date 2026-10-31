@@ -14,6 +14,7 @@ datasource db {
 
 model User {
   id          String   @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   name        String
   email       String   @unique
   password    String
@@ -43,10 +44,13 @@ model User {
   bookingsCreated Booking[]           @relation("BookingCreator")
   paymentsRecorded Payment[]         @relation("PaymentRecorder")
   paymentsCancelled Payment[]        @relation("PaymentCanceller")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@index([organizationId])
 }
 
 model Lead {
   id                String    @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   name              String
   phone             String
   alternatePhone    String?
@@ -84,14 +88,17 @@ model Lead {
   checkIns    SiteVisitCheckIn[]
   portalAccess PortalAccess?
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([status])
   @@index([assignedToId])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 model Property {
   id           String   @id @default(cuid())
-  code         String   @unique
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
+  code         String
   title        String
   description  String?
   type         String   @default("APARTMENT")
@@ -127,23 +134,30 @@ model Property {
   documents   Document[]
   checkIns    SiteVisitCheckIn[]
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@unique([organizationId, code])
   @@index([status])
   @@index([city])
+  @@index([organizationId])
 }
 
 model LeadProperty {
   leadId     String
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   propertyId String
   createdAt  DateTime @default(now())
 
   lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@id([leadId, propertyId])
+  @@index([organizationId])
 }
 
 model FollowUp {
   id           String    @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   title        String
   type         String    @default("CALL") // CALL | MEETING | SITE_VISIT | WHATSAPP | EMAIL | OTHER
   dueAt        DateTime
@@ -164,12 +178,15 @@ model FollowUp {
   assignedTo User?     @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
   checkIns   SiteVisitCheckIn[]
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([dueAt])
   @@index([status])
+  @@index([organizationId])
 }
 
 model Deal {
   id                String    @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   title             String
   value             Float
   commissionPct     Float     @default(2)
@@ -190,11 +207,14 @@ model Deal {
   booking    Booking?
   documents  Document[]
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([stage])
+  @@index([organizationId])
 }
 
 model Activity {
   id         String   @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   type       String   // NOTE | CALL | EMAIL | WHATSAPP | STATUS | FOLLOWUP | CREATED | ASSIGNED | DEAL | PROPERTY | MEETING
   content    String
   leadId     String?
@@ -208,11 +228,14 @@ model Activity {
   deal     Deal?     @relation(fields: [dealId], references: [id], onDelete: Cascade)
   user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 model WhatsAppTemplate {
   id        String   @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   name      String
   category  String   @default("GENERAL") // GREETING | FOLLOW_UP | PROPERTY | SITE_VISIT | GENERAL | FESTIVE
   body      String
@@ -222,10 +245,13 @@ model WhatsAppTemplate {
   metaParams   String   @default("") // comma separated variable keys in {{1}}, {{2}} order, e.g. "name,property"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@index([organizationId])
 }
 
 model WhatsAppMessage {
   id        String   @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   phone     String
   body      String
   direction String   @default("OUT") // OUT | IN
@@ -241,12 +267,15 @@ model WhatsAppMessage {
   lead Lead? @relation(fields: [leadId], references: [id], onDelete: Cascade)
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([createdAt])
   @@index([leadId, createdAt])
+  @@index([organizationId])
 }
 
 model Settings {
-  id                 Int      @id @default(1)
+  id                 String   @id @default(cuid())
+  organizationId     String   @unique @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   companyName        String   @default("EstateDesk Realty")
   companyPhone       String?
   companyEmail       String?
@@ -257,7 +286,7 @@ model Settings {
   waApiEnabled       Boolean  @default(false)
   waPhoneNumberId    String?
   waAccessToken      String?
-  leadWebhookKey     String?
+  leadWebhookKey     String?  @unique
   waVerifyToken      String?
   waAppSecret        String?
   waDigestTemplate   String?  // approved Meta template name used for agent daily digest on WhatsApp
@@ -287,7 +316,7 @@ model Settings {
   knowlarityAuthToken String?
   knowlaritySrNumber String?
   knowlarityCallerId String?
-  telephonyWebhookKey String?
+  telephonyWebhookKey String? @unique
   // Attendance
   officeLatitude     Float?
   officeLongitude    Float?
@@ -297,6 +326,8 @@ model Settings {
   receiptPrefix      String   @default("RCPT")
   nextReceiptNo      Int      @default(1001)
   updatedAt          DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@index([organizationId])
 }
 
 model PushSubscription {
@@ -333,7 +364,8 @@ model LoginAttempt {
 
 model Booking {
   id            String    @id @default(cuid())
-  bookingNo     String    @unique
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
+  bookingNo     String
   dealId        String?   @unique
   leadId        String
   propertyId    String?
@@ -355,11 +387,15 @@ model Booking {
   payments     Payment[]
   documents    Document[]
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@unique([organizationId, bookingNo])
   @@index([leadId])
+  @@index([organizationId])
 }
 
 model PaymentInstallment {
   id             String    @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   bookingId      String
   label          String    // Token, Agreement (10%), Slab 1 ...
   dueDate        DateTime
@@ -376,15 +412,18 @@ model PaymentInstallment {
   booking  Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   payments Payment[]
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([dueDate])
   @@index([status])
+  @@index([organizationId])
 }
 
 /// Every amount received gets its own receipt. Receipts are never deleted, only cancelled
 /// (with a reason) so the receipt number sequence stays complete for audits.
 model Payment {
   id            String    @id @default(cuid())
-  receiptNo     String    @unique
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
+  receiptNo     String
   bookingId     String
   installmentId String
   amount        Float
@@ -404,12 +443,16 @@ model Payment {
   recordedBy  User?              @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
   cancelledBy User?              @relation("PaymentCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@unique([organizationId, receiptNo])
   @@index([bookingId])
   @@index([paidAt])
+  @@index([organizationId])
 }
 
 model CallLog {
   id             String    @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   direction      String    @default("OUT") // OUT | IN
   status         String    @default("ANSWERED") // INITIATED | RINGING | ANSWERED | MISSED | BUSY | NO_ANSWER | FAILED
   provider       String    @default("MANUAL") // MANUAL | EXOTEL | KNOWLARITY
@@ -430,12 +473,15 @@ model CallLog {
   lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([startedAt])
   @@index([leadId])
+  @@index([organizationId])
 }
 
 model Attendance {
   id               String    @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   userId           String
   date             String    // yyyy-MM-dd in app timezone
   checkInAt        DateTime
@@ -452,12 +498,15 @@ model Attendance {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@unique([userId, date])
   @@index([date])
+  @@index([organizationId])
 }
 
 model SiteVisitCheckIn {
   id          String   @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   leadId      String
   propertyId  String?
   followUpId  String?
@@ -474,11 +523,14 @@ model SiteVisitCheckIn {
   followUp FollowUp? @relation(fields: [followUpId], references: [id], onDelete: SetNull)
   user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 model Document {
   id                String   @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   name              String
   category          String   @default("OTHER") // KYC_PAN | KYC_AADHAAR | KYC_PHOTO | AGREEMENT | SALE_DEED | ALLOTMENT_LETTER | RECEIPT | LOAN | NOC | OTHER
   storagePath       String   // path inside the private documents bucket (or local path in dev)
@@ -498,11 +550,14 @@ model Document {
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   uploadedBy User?     @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([leadId])
+  @@index([organizationId])
 }
 
 model PortalAccess {
   id           String    @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   leadId       String    @unique
   token        String    @unique // random, shared with the customer as a private link
   pin          String?   // optional 4-6 digit PIN (bcrypt hash)
@@ -511,10 +566,13 @@ model PortalAccess {
   createdAt    DateTime  @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@index([organizationId])
 }
 
 model IntegrationLog {
   id        String   @id @default(cuid())
+  organizationId String @default(dbgenerated("current_setting('app.org_id'::text, true)"))
   source    String   // FACEBOOK | INSTAGRAM | 99ACRES | MAGICBRICKS | HOUSING | WEBSITE | EXOTEL | KNOWLARITY
   status    String   // OK | DUPLICATE | ERROR | IGNORED
   message   String?
@@ -522,5 +580,99 @@ model IntegrationLog {
   leadId    String?
   createdAt DateTime @default(now())
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   @@index([source, createdAt])
+  @@index([organizationId])
+}
+
+/// A customer company (tenant). Every business record belongs to exactly one organization.
+model Organization {
+  id                     String    @id @default(cuid())
+  name                   String
+  slug                   String    @unique // used for the public website URL: /site/<slug>
+  status                 String    @default("TRIAL") // TRIAL | ACTIVE | PAST_DUE | CANCELLED | SUSPENDED
+  planId                 String?
+  billingCycle           String    @default("MONTHLY") // MONTHLY | YEARLY
+  trialEndsAt            DateTime?
+  currentPeriodEnd       DateTime?
+  razorpayCustomerId     String?
+  razorpaySubscriptionId String?   @unique
+  ownerName              String?
+  ownerEmail             String?
+  ownerPhone             String?
+  city                   String?
+  businessType           String?   // BROKER | BUILDER | BOTH
+  teamSize               String?
+  onboardedAt            DateTime?
+  suspendedReason        String?
+  notes                  String?   // internal notes by the platform owner
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  plan     Plan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
+  invoices Invoice[]
+  users                User[]
+  leads                Lead[]
+  properties           Property[]
+  leadProperties       LeadProperty[]
+  followUps            FollowUp[]
+  deals                Deal[]
+  activities           Activity[]
+  whatsAppTemplates    WhatsAppTemplate[]
+  whatsAppMessages     WhatsAppMessage[]
+  settings             Settings?
+  bookings             Booking[]
+  paymentInstallments  PaymentInstallment[]
+  payments             Payment[]
+  callLogs             CallLog[]
+  attendance           Attendance[]
+  siteVisitCheckIns    SiteVisitCheckIn[]
+  documents            Document[]
+  portalAccess         PortalAccess[]
+  integrationLogs      IntegrationLog[]
+
+  @@index([status])
+}
+
+/// Subscription plan offered on the pricing page (managed from the super admin panel).
+model Plan {
+  id                    String   @id @default(cuid())
+  code                  String   @unique // STARTER | GROWTH | PRO ...
+  name                  String
+  description           String?
+  priceMonthly          Float
+  priceYearly           Float
+  maxUsers              Int      @default(3)   // 0 = unlimited
+  maxLeads              Int      @default(0)   // 0 = unlimited
+  maxProperties         Int      @default(0)   // 0 = unlimited
+  storageGb             Int      @default(2)
+  features              String   @default("") // comma separated feature keys
+  razorpayPlanIdMonthly String?
+  razorpayPlanIdYearly  String?
+  highlighted           Boolean  @default(false)
+  active                Boolean  @default(true)
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organizations Organization[]
+}
+
+/// A subscription payment received from a tenant (from Razorpay webhooks or recorded manually).
+model Invoice {
+  id                String   @id @default(cuid())
+  organizationId    String
+  number            String   @unique
+  amount            Float
+  currency          String   @default("INR")
+  status            String   @default("PAID") // PAID | FAILED | REFUNDED
+  description       String?
+  razorpayPaymentId String?  @unique
+  periodStart       DateTime?
+  periodEnd         DateTime?
+  createdAt         DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }

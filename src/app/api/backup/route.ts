@@ -13,9 +13,7 @@ export async function GET() {
 
   const [users, settings, leads, properties, leadProperties, followUps, deals, activities, templates, messages, bookings, installments, calls, attendance, siteCheckIns, documents, portalAccess] = await Promise.all([
     db.user.findMany({ omit: { password: true }, orderBy: { createdAt: "asc" } }),
-    db.settings.findUnique({
-      where: { id: 1 },
-      omit: { waAccessToken: true, waAppSecret: true, fbAppSecret: true, fbPageAccessToken: true, exotelApiKey: true, exotelApiToken: true, knowlarityApiKey: true, knowlarityAuthToken: true },
+    db.settings.findFirst({ omit: { waAccessToken: true, waAppSecret: true, fbAppSecret: true, fbPageAccessToken: true, exotelApiKey: true, exotelApiToken: true, knowlarityApiKey: true, knowlarityAuthToken: true },
     }),
     db.lead.findMany({ orderBy: { createdAt: "asc" } }),
     db.property.findMany({ orderBy: { createdAt: "asc" } }),

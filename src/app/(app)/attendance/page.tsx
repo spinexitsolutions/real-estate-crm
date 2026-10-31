@@ -47,7 +47,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   const monthDate = parse(`${monthKey}-01`, "yyyy-MM-dd", new Date());
   const days = eachDayOfInterval({ start: startOfMonth(monthDate), end: endOfMonth(monthDate) }).map((d) => format(d, "yyyy-MM-dd"));
 
-  const settings = await db.settings.findUnique({ where: { id: 1 }, select: { officeLatitude: true, officeLongitude: true, officeRadiusM: true } });
+  const settings = await db.settings.findFirst({ select: { officeLatitude: true, officeLongitude: true, officeRadiusM: true } });
   const radius = settings?.officeRadiusM ?? 300;
   const hasOffice = settings?.officeLatitude != null && settings?.officeLongitude != null;
 

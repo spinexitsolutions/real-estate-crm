@@ -34,7 +34,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
   const origin = `${proto}://${host}`;
 
-  const settings = await db.settings.findUnique({ where: { id: 1 } });
+  const settings = await db.settings.findFirst();
   const key = settings?.leadWebhookKey ?? "";
   const since7 = subDays(new Date(), 7);
   const since30 = subDays(new Date(), 30);
@@ -84,7 +84,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       logSource: "FACEBOOK",
       leadSource: "FACEBOOK",
       configured: fbConfigured,
-      url: `${origin}/api/webhooks/facebook`,
+      url: `${origin}/api/webhooks/facebook?org=${user.organizationId}`,
       steps: [
         "In Meta for Developers, open your app and add the Webhooks product.",
         <>Choose <b>Page</b>, click Subscribe and paste the callback URL and the verify token from the form below.</>,
@@ -101,7 +101,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       logSource: "INSTAGRAM",
       leadSource: "INSTAGRAM",
       configured: fbConfigured,
-      url: `${origin}/api/webhooks/facebook`,
+      url: `${origin}/api/webhooks/facebook?org=${user.organizationId}`,
       steps: [
         "Instagram lead forms are delivered through the same Facebook Page webhook.",
         "Link your Instagram professional account to the Facebook Page used above.",

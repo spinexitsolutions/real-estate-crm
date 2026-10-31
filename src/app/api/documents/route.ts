@@ -46,7 +46,7 @@ export async function POST(req: Request) {
   const name = (field(fd, "name") || file.name || "Document").slice(0, 160);
   const visibleToCustomer = ["1", "true", "on"].includes(field(fd, "visibleToCustomer"));
 
-  const up = await uploadDocument(bytes, mime, links.leadId ? `leads/${links.leadId}` : `properties/${links.propertyId}`);
+  const up = await uploadDocument(bytes, mime, `${user.organizationId}/${links.leadId ? `leads/${links.leadId}` : `properties/${links.propertyId}`}`);
   if ("error" in up) return NextResponse.json({ error: up.error }, { status: 500 });
 
   const doc = await db.document.create({

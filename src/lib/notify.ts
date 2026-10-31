@@ -14,7 +14,7 @@ export async function notifyUser(userId: string | null | undefined, payload: Not
     if (!isPushConfigured()) return;
     const [user, settings] = await Promise.all([
       db.user.findUnique({ where: { id: userId }, select: { active: true, notifyPush: true } }),
-      db.settings.findUnique({ where: { id: 1 }, select: { pushEnabled: true } }),
+      db.settings.findFirst({ select: { pushEnabled: true } }),
     ]);
     if (!user?.active || !user.notifyPush || settings?.pushEnabled === false) return;
     await sendPushToUser(userId, payload);

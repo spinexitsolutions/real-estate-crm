@@ -3,7 +3,7 @@
 import { randomBytes } from "crypto";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import { db, requireOrgId } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import type { ActionResult } from "@/lib/action";
 import { isPortalKey, normalizePortalLead, PORTAL_LABEL, type PortalKey } from "@/lib/portal-normalize";
@@ -17,8 +17,8 @@ export async function saveFacebookSettings(fd: FormData): Promise<ActionResult> 
   const secret = str(fd, "fbAppSecret");
   const token = str(fd, "fbPageAccessToken");
   await db.settings.upsert({
-    where: { id: 1 },
-    create: { id: 1, fbVerifyToken: verify || null, fbAppSecret: secret || null, fbPageAccessToken: token || null },
+    where: { organizationId: await requireOrgId() },
+    create: { fbVerifyToken: verify || null, fbAppSecret: secret || null, fbPageAccessToken: token || null },
     update: {
       fbVerifyToken: verify || null,
       ...(secret ? { fbAppSecret: secret } : {}),
@@ -32,7 +32,7 @@ export async function saveFacebookSettings(fd: FormData): Promise<ActionResult> 
 export async function clearFacebookSecret(field: "fbAppSecret" | "fbPageAccessToken"): Promise<ActionResult> {
   const user = await requireUser();
   if (user.role !== "ADMIN") return { error: "Only admins can change integration settings." };
-  await db.settings.update({ where: { id: 1 }, data: { [field]: null } });
+  await db.settings.update({ where: { organizationId: await requireOrgId() }, data: { [field]: null } });
   revalidatePath("/integrations");
   return { ok: true };
 }
@@ -46,10 +46,10 @@ export async function generateVerifyToken(): Promise<ActionResult<{ token: strin
 export async function ensureLeadWebhookKey(): Promise<ActionResult<{ key: string }>> {
   const user = await requireUser();
   if (user.role !== "ADMIN") return { error: "Only admins can change integration settings." };
-  const s = await db.settings.findUnique({ where: { id: 1 } });
+  const s = await db.settings.findFirst();
   if (s?.leadWebhookKey) return { ok: true, data: { key: s.leadWebhookKey } };
   const key = randomBytes(16).toString("hex");
-  await db.settings.upsert({ where: { id: 1 }, create: { id: 1, leadWebhookKey: key }, update: { leadWebhookKey: key } });
+  await db.settings.upsert({ where: { organizationId: await requireOrgId() }, create: { leadWebhookKey: key }, update: { leadWebhookKey: key } });
   revalidatePath("/integrations");
   return { ok: true, data: { key } };
 }
@@ -66,7 +66,7 @@ export async function sendTestPortalLead(portal: string): Promise<ActionResult<{
   const user = await requireUser();
   if (user.role !== "ADMIN" && user.role !== "MANAGER") return { error: "Only admins and managers can send test leads." };
   if (!isPortalKey(portal)) return { error: "Unknown portal." };
-  const s = await db.settings.findUnique({ where: { id: 1 } });
+  const s = await db.settings.findFirst();
   if (!s?.leadWebhookKey) return { error: "Generate the webhook key first." };
 
   const phone = `9${String(Date.now()).slice(-9)}`;

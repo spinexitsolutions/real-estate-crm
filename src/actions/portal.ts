@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import { db, rawDb } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import type { ActionResult } from "@/lib/action";
@@ -56,17 +56,18 @@ const WINDOW_MS = 15 * 60 * 1000;
 
 /** Public: customer enters the PIN for their portal link. */
 export async function unlockPortal(token: string, _prev: { error?: string } | undefined, fd: FormData): Promise<{ error?: string } | undefined> {
-  const access = await db.portalAccess.findUnique({ where: { token } });
+  // Public (no login): look the link up directly by its unique token.
+  const access = await rawDb.portalAccess.findUnique({ where: { token } });
   if (!access || access.revokedAt) return { error: "This link is no longer valid. Please contact your relationship manager." };
   if (!access.pin) redirect(`/portal/${token}`);
   const key = `portal:${token}`;
   const since = new Date(Date.now() - WINDOW_MS);
-  const fails = await db.loginAttempt.count({ where: { key, success: false, createdAt: { gte: since } } });
+  const fails = await rawDb.loginAttempt.count({ where: { key, success: false, createdAt: { gte: since } } });
   if (fails >= MAX_PIN_FAILS) return { error: "Too many wrong attempts. Please try again in 15 minutes." };
 
   const pin = String(fd.get("pin") ?? "").trim();
   const ok = /^\d{4,6}$/.test(pin) && (await bcrypt.compare(pin, access.pin));
-  await db.loginAttempt.create({ data: { key, success: ok } });
+  await rawDb.loginAttempt.create({ data: { key, success: ok } });
   if (!ok) {
     const left = MAX_PIN_FAILS - fails - 1;
     return { error: left > 0 ? `Incorrect PIN. ${left} attempt${left === 1 ? "" : "s"} left.` : "Too many wrong attempts. Please try again in 15 minutes." };

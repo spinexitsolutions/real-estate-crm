@@ -5,11 +5,11 @@ import { formatCompact } from "@/lib/format";
 import { parseImages } from "@/lib/utils";
 import type { PublicProperty } from "@/lib/site";
 
-export function ListingCard({ p, currency }: { p: PublicProperty; currency: string }) {
+export function ListingCard({ slug, p, currency }: { slug: string; p: PublicProperty; currency: string }) {
   const cover = parseImages(p.images)[0];
   const rent = p.listingType === "RENT";
   return (
-    <Link href={`/site/properties/${p.id}`} className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:shadow-pop">
+    <Link href={`/site/${slug}/properties/${p.id}`} className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:shadow-pop">
       <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element

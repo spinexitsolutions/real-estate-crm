@@ -1,3 +1,5 @@
+import { runAsTenant } from "@/lib/db";
+import { orgFromLeadKey } from "@/lib/webhook-tenant";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { PORTAL_LABEL, parseLeadEmail } from "@/lib/portal-normalize";
@@ -9,9 +11,9 @@ import { ingestPortalLead } from "@/lib/integrations";
  * JSON {from, subject, text, html} (Cloudflare Email Workers, Zapier, Make) or
  * multipart form (SendGrid Inbound Parse: from, subject, text, html).
  */
-export async function POST(req: Request) {
+async function POSTInTenant(req: Request) {
   const key = new URL(req.url).searchParams.get("key") ?? req.headers.get("x-api-key") ?? "";
-  const settings = await db.settings.findUnique({ where: { id: 1 }, select: { leadWebhookKey: true } });
+  const settings = await db.settings.findFirst({ select: { leadWebhookKey: true } });
   if (!settings?.leadWebhookKey || key !== settings.leadWebhookKey) return NextResponse.json({ ok: false, error: "Invalid or missing API key" }, { status: 401 });
 
   let mail: { from?: string; subject?: string; text?: string; html?: string } = {};
@@ -32,4 +34,10 @@ export async function POST(req: Request) {
   const res = await ingestPortalLead(lead, portal, { from: mail.from, subject: mail.subject, text: (mail.text || mail.html || "").slice(0, 3000) }, { logSource: portal === "generic" ? "WEBSITE" : undefined, via: `${portal === "generic" ? "Email" : PORTAL_LABEL[portal]} lead email` });
   if (!res.ok) return NextResponse.json({ ok: false, error: res.error }, { status: 422 });
   return NextResponse.json({ ok: true, leadId: res.leadId, duplicate: res.duplicate });
+}
+
+export async function POST(req: Request) {
+  const orgId = await orgFromLeadKey(req);
+  if (!orgId) return Response.json({ ok: false, error: "Invalid or missing key" }, { status: 401 });
+  return runAsTenant(orgId, () => POSTInTenant(req));
 }

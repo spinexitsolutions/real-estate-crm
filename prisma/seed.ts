@@ -1,10 +1,57 @@
 /* Demo data so the CRM looks alive on first run. Run with: npm run db:seed */
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
+import { db, rawDb, runAsTenant, requireOrgId } from "../src/lib/db";
 
 process.env.TZ = process.env.APP_TIMEZONE || "Asia/Kolkata";
-const db = new PrismaClient();
+
+const DAY = 86400000;
+
+/** Subscription plans shown on the pricing page (editable later from the super admin panel). */
+const PLANS = [
+  {
+    code: "STARTER",
+    name: "Starter",
+    description: "For individual brokers and small teams getting organised.",
+    priceMonthly: 999,
+    priceYearly: 9990,
+    maxUsers: 3,
+    maxLeads: 2000,
+    maxProperties: 200,
+    storageGb: 2,
+    features: "leads,pipeline,followups,properties,whatsapp_link,reports,brochure,mobile",
+    sortOrder: 1,
+  },
+  {
+    code: "GROWTH",
+    name: "Growth",
+    description: "For growing agencies that want automation and integrations.",
+    priceMonthly: 2499,
+    priceYearly: 24990,
+    maxUsers: 10,
+    maxLeads: 20000,
+    maxProperties: 2000,
+    storageGb: 20,
+    features:
+      "leads,pipeline,followups,properties,whatsapp_link,reports,brochure,mobile,whatsapp_api,portal_integrations,website,bookings,customer_portal,documents,attendance",
+    highlighted: true,
+    sortOrder: 2,
+  },
+  {
+    code: "PRO",
+    name: "Pro",
+    description: "For builders and large teams that need everything.",
+    priceMonthly: 5999,
+    priceYearly: 59990,
+    maxUsers: 30,
+    maxLeads: 0,
+    maxProperties: 0,
+    storageGb: 100,
+    features:
+      "leads,pipeline,followups,properties,whatsapp_link,reports,brochure,mobile,whatsapp_api,portal_integrations,website,bookings,customer_portal,documents,attendance,click_to_call,api_access,priority_support",
+    sortOrder: 3,
+  },
+];
 
 // Deterministic pseudo-random so the demo looks the same every time
 let seed = 42;
@@ -59,24 +106,64 @@ const IMAGES = [
 
 async function main() {
   console.log("Clearing existing data...");
-  // Calls / attendance / site visits (calls only SET NULL on lead/user delete, so clear them explicitly)
-  await db.callLog.deleteMany();
-  await db.siteVisitCheckIn.deleteMany();
-  await db.attendance.deleteMany();
-  await db.activity.deleteMany();
-  await db.whatsAppMessage.deleteMany();
-  await db.followUp.deleteMany();
-  await db.deal.deleteMany();
-  await db.leadProperty.deleteMany();
-  await db.lead.deleteMany();
-  await db.property.deleteMany();
-  await db.whatsAppTemplate.deleteMany();
-  await db.user.deleteMany();
-  await db.settings.deleteMany();
+  // Deleting organizations cascades to every tenant table.
+  await rawDb.organization.deleteMany();
+  for (const p of PLANS) await rawDb.plan.upsert({ where: { code: p.code }, create: p, update: p });
+  const growth = await rawDb.plan.findUniqueOrThrow({ where: { code: "GROWTH" } });
 
+  // A second, small company proves data isolation: its users must never see Skyline's data and vice versa.
+  const other = await rawDb.organization.create({
+    data: { name: "Harbour Homes", slug: "harbour-homes", status: "TRIAL", planId: growth.id, trialEndsAt: new Date(Date.now() + 9 * DAY), ownerName: "Sameer Khan", ownerEmail: "owner@harbourhomes.in", city: "Pune", businessType: "BROKER" },
+  });
+  await runAsTenant(other.id, async () => {
+    await db.settings.create({ data: { companyName: "Harbour Homes", companyPhone: "+91 98900 55555", leadWebhookKey: randomBytes(16).toString("hex") } });
+    const owner = await db.user.create({ data: { name: "Sameer Khan", email: "owner@harbourhomes.in", password: await bcrypt.hash("admin123", 10), role: "ADMIN", phone: "9890055555" } });
+    for (const [name, phone] of [["Isolation Test Lead", "9000000001"], ["Harbour Buyer", "9000000002"]]) {
+      await db.lead.create({ data: { name, phone, source: "WEBSITE", status: "NEW", assignedToId: owner.id, createdById: owner.id } });
+    }
+  });
+
+  const org = await rawDb.organization.create({
+    data: {
+      name: "Skyline Realty",
+      slug: "skyline-realty",
+      status: "ACTIVE",
+      planId: growth.id,
+      billingCycle: "MONTHLY",
+      currentPeriodEnd: new Date(Date.now() + 21 * DAY),
+      ownerName: "Aditya Sharma",
+      ownerEmail: "admin@estatedesk.com",
+      ownerPhone: "9820012345",
+      city: "Mumbai",
+      businessType: "BOTH",
+      teamSize: "6-20",
+      onboardedAt: new Date(Date.now() - 180 * DAY),
+    },
+  });
+  for (let m = 1; m <= 3; m++) {
+    await rawDb.invoice.create({
+      data: {
+        organizationId: org.id,
+        number: `INV-${new Date().getFullYear()}-${String(m).padStart(5, "0")}`,
+        amount: Math.round(growth.priceMonthly * 1.18),
+        description: "Growth plan - monthly (incl. 18% GST)",
+        periodStart: new Date(Date.now() - (m * 30 + 9) * DAY),
+        periodEnd: new Date(Date.now() - ((m - 1) * 30 + 9) * DAY),
+        createdAt: new Date(Date.now() - (m * 30 + 9) * DAY),
+      },
+    });
+  }
+  await runAsTenant(org.id, () => seedSkyline());
+
+  console.log("\nDone. Sign in with:");
+  console.log("  Skyline Realty (active)  -> admin@estatedesk.com / admin123  (manager@ / rohan@ also work)");
+  console.log("  Harbour Homes (trial)    -> owner@harbourhomes.in / admin123");
+  console.log("  Public website           -> /site/skyline-realty");
+}
+
+async function seedSkyline() {
   await db.settings.create({
     data: {
-      id: 1,
       companyName: "Skyline Realty",
       companyPhone: "+91 98200 12345",
       companyEmail: "sales@skylinerealty.in",
@@ -423,7 +510,7 @@ async function main() {
   {
     const OFFICE = { lat: 19.066, lng: 72.8686 }; // BKC, Mumbai
     await db.settings.update({
-      where: { id: 1 },
+      where: { organizationId: await requireOrgId() },
       data: { officeLatitude: OFFICE.lat, officeLongitude: OFFICE.lng, officeRadiusM: 300, telephonyWebhookKey: randomBytes(16).toString("hex") },
     });
 
@@ -643,14 +730,10 @@ async function main() {
         await db.portalAccess.create({ data: { leadId: d.leadId, token: "demo-portal-token-123456", lastViewedAt: new Date(now - 2 * 86400000) } });
       }
     }
-    await db.settings.update({ where: { id: 1 }, data: { nextReceiptNo: receiptNo } });
+    await db.settings.update({ where: { organizationId: await requireOrgId() }, data: { nextReceiptNo: receiptNo } });
     console.log(`  ${wonDeals.length} bookings, ${receiptNo - 1001} receipts. Demo customer portal: /portal/demo-portal-token-123456`);
   }
 
-  console.log("\nDone. Sign in with:");
-  console.log("  Admin   -> admin@estatedesk.com / admin123");
-  console.log("  Manager -> manager@estatedesk.com / admin123");
-  console.log("  Agent   -> rohan@estatedesk.com / admin123");
 }
 
 main()
@@ -658,4 +741,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => db.$disconnect());
+  .finally(() => rawDb.$disconnect());

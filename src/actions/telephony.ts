@@ -2,7 +2,7 @@
 
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import { db, requireOrgId } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import type { ActionResult } from "@/lib/action";
 import { str } from "@/lib/utils";
@@ -12,7 +12,7 @@ export async function saveTelephony(fd: FormData): Promise<ActionResult> {
   if (user.role !== "ADMIN") return { error: "Only admins can change telephony settings." };
   const provider = str(fd, "telephonyProvider");
   if (provider && provider !== "EXOTEL" && provider !== "KNOWLARITY") return { error: "Unknown provider." };
-  const s = await db.settings.findUnique({ where: { id: 1 } });
+  const s = await db.settings.findFirst();
 
   const keep = (key: string, current: string | null | undefined) => {
     const v = str(fd, key);
@@ -46,7 +46,7 @@ export async function saveTelephony(fd: FormData): Promise<ActionResult> {
       knowlarityAuthToken: keep("knowlarityAuthToken", s?.knowlarityAuthToken),
     });
   }
-  await db.settings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
+  await db.settings.upsert({ where: { organizationId: await requireOrgId() }, create: { ...data }, update: data });
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -55,7 +55,7 @@ export async function regenerateTelephonyKey(): Promise<ActionResult<{ key: stri
   const user = await requireUser();
   if (user.role !== "ADMIN") return { error: "Only admins can do this." };
   const key = randomBytes(16).toString("hex");
-  await db.settings.upsert({ where: { id: 1 }, create: { id: 1, telephonyWebhookKey: key }, update: { telephonyWebhookKey: key } });
+  await db.settings.upsert({ where: { organizationId: await requireOrgId() }, create: { telephonyWebhookKey: key }, update: { telephonyWebhookKey: key } });
   revalidatePath("/settings");
   return { ok: true, data: { key } };
 }

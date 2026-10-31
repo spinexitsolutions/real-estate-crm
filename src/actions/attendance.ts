@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { format } from "date-fns";
-import { db } from "@/lib/db";
+import { db, requireOrgId } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import type { ActionResult } from "@/lib/action";
 import { distanceMeters, formatDistance, isValidCoord } from "@/lib/geo";
@@ -15,7 +15,7 @@ function todayKey(d = new Date()) {
 }
 
 async function officeDistance(lat: number, lng: number) {
-  const s = await db.settings.findUnique({ where: { id: 1 }, select: { officeLatitude: true, officeLongitude: true, officeRadiusM: true } });
+  const s = await db.settings.findFirst({ select: { officeLatitude: true, officeLongitude: true, officeRadiusM: true } });
   if (s?.officeLatitude === null || s?.officeLatitude === undefined || s.officeLongitude === null) return { distance: null as number | null, radius: s?.officeRadiusM ?? 300 };
   return { distance: distanceMeters(lat, lng, s.officeLatitude, s.officeLongitude), radius: s.officeRadiusM };
 }
@@ -78,8 +78,8 @@ export async function saveOfficeLocation(input: { lat: number | null; lng: numbe
   const radius = Math.round(Number(input.radius) || 300);
   if (radius < 50 || radius > 20000) return { error: "Radius must be between 50 m and 20 km." };
   await db.settings.upsert({
-    where: { id: 1 },
-    create: { id: 1, officeLatitude: input.lat, officeLongitude: input.lng, officeRadiusM: radius },
+    where: { organizationId: await requireOrgId() },
+    create: { officeLatitude: input.lat, officeLongitude: input.lng, officeRadiusM: radius },
     update: { officeLatitude: input.lat, officeLongitude: input.lng, officeRadiusM: radius },
   });
   revalidatePath("/attendance");

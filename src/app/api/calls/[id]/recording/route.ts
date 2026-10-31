@@ -25,7 +25,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   // Recordings that are not hosted by a telephony provider are public links: just redirect.
   if (call.provider === "MANUAL") return NextResponse.redirect(url.toString(), 302);
 
-  const settings = await db.settings.findUnique({ where: { id: 1 } });
+  const settings = await db.settings.findFirst();
   const range = req.headers.get("range");
   const upstream = await fetch(url, {
     headers: { ...recordingAuthHeaders(settings, url.toString()), ...(range ? { Range: range } : {}) },

@@ -13,14 +13,14 @@ import { Field, Input, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
 /** Public property website settings: enable, tagline, about, and the shareable URL. */
-export function WebsiteCard({ origin, enabled, tagline, about, publishedCount }: { origin: string; enabled: boolean; tagline: string | null; about: string | null; publishedCount: number }) {
+export function WebsiteCard({ origin, enabled, tagline, about, publishedCount, slug }: { origin: string; enabled: boolean; tagline: string | null; about: string | null; publishedCount: number; slug: string }) {
   const router = useRouter();
   const [on, setOn] = useState(enabled);
   const [tag, setTag] = useState(tagline ?? "");
   const [text, setText] = useState(about ?? "");
   const [copied, setCopied] = useState(false);
   const [pending, start] = useTransition();
-  const url = `${origin}/site`;
+  const url = `${origin}/site/${slug}`;
 
   const save = () =>
     start(async () => {
@@ -85,7 +85,7 @@ export function WebsiteCard({ origin, enabled, tagline, about, publishedCount }:
             >
               {copied ? <Check /> : <Copy />}
             </Button>
-            <a href="/site" target="_blank" rel="noreferrer" className={buttonClass("secondary", "md")}>
+            <a href={`/site/${slug}`} target="_blank" rel="noreferrer" className={buttonClass("secondary", "md")}>
               <ExternalLink /> Open
             </a>
           </div>

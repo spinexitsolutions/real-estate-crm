@@ -168,7 +168,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PropertyStatusMenu id={property.id} status={property.status} />
-          <PublishToggle id={property.id} published={property.published} siteUrl={`/site/properties/${property.id}`} />
+          <PublishToggle id={property.id} published={property.published} siteUrl={`/site?to=/properties/${property.id}`} />
           <BrochureActions propertyId={property.id} title={property.title} publicUrl={publicBrochure} shareText={shareText} />
           <PropertyShareButtons text={shareText} />
           <PropertyMoreMenu id={property.id} featured={property.featured} canDelete={canDelete} />

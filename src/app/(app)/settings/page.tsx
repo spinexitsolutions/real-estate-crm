@@ -10,7 +10,7 @@ import { BrandingCard } from "@/components/settings/branding-card";
 import { WebsiteCard } from "@/components/settings/website-card";
 import { TelephonyCard } from "@/components/settings/telephony-card";
 import { PaymentSettingsCard } from "@/components/settings/payment-settings-card";
-import { db } from "@/lib/db";
+import { db, rawDb } from "@/lib/db";
 
 export const metadata = { title: "Settings" };
 
@@ -21,6 +21,7 @@ export default async function SettingsPage() {
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
   const origin = `${proto}://${host}`;
+  const org = await rawDb.organization.findUniqueOrThrow({ where: { id: s.organizationId }, select: { slug: true } });
   const publishedCount = await db.property.count({ where: { published: true, status: { in: ["AVAILABLE", "RESERVED"] } } });
 
   return (
@@ -43,11 +44,12 @@ export default async function SettingsPage() {
           waVerifyToken: s.waVerifyToken ?? "",
           hasAppSecret: !!s.waAppSecret,
           waDigestTemplate: s.waDigestTemplate ?? "",
+          orgId: s.organizationId,
         }}
       />
       <div className="mt-6 grid gap-6">
         <BrandingCard logoUrl={s.logoUrl} brandColor={s.brandColor} reraNumber={s.reraNumber} />
-        <WebsiteCard origin={origin} enabled={s.websiteEnabled} tagline={s.websiteTagline} about={s.websiteAbout} publishedCount={publishedCount} />
+        <WebsiteCard slug={org.slug} origin={origin} enabled={s.websiteEnabled} tagline={s.websiteTagline} about={s.websiteAbout} publishedCount={publishedCount} />
         <PaymentSettingsCard receiptPrefix={s.receiptPrefix} nextReceiptNo={s.nextReceiptNo} waPaymentTemplate={s.waPaymentTemplate} />
         <TelephonyCard
           origin={origin}

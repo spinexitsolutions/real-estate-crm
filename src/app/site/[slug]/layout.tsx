@@ -3,11 +3,14 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Building2, Mail, MapPin, Phone } from "lucide-react";
 import { getSite } from "@/lib/site";
+import { siteSlug, withSite } from "@/lib/site";
 import { originFrom } from "@/lib/brochure-link";
 import { waLink } from "@/lib/utils";
 import { WhatsAppIcon } from "@/components/ui/icons";
 
-export async function generateMetadata(): Promise<Metadata> {
+async function generateMetadataInSite(): Promise<Metadata> {
+  const slug = siteSlug();
+  void slug;
   const site = await getSite();
   const origin = originFrom(await headers());
   return {
@@ -19,7 +22,9 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function SiteLayout({ children }: { children: React.ReactNode }) {
+async function SiteLayoutInSite({ children }: { children: React.ReactNode }) {
+  const slug = siteSlug();
+  void slug;
   const site = await getSite();
   const style = { "--brand": site.brandColor } as React.CSSProperties;
 
@@ -43,7 +48,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
     <div style={style} className="min-h-screen bg-white text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 sm:px-6 lg:px-8">
-          <Link href="/site" className="flex min-w-0 items-center gap-2.5">
+          <Link href={`/site/${slug}`} className="flex min-w-0 items-center gap-2.5">
             {site.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={site.logoUrl} alt={site.companyName} className="h-9 max-w-36 object-contain" />
@@ -53,16 +58,16 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             <span className="truncate text-base font-semibold tracking-tight">{site.companyName}</span>
           </Link>
           <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
-            <Link href="/site/properties?for=buy" className="hover:text-slate-900">
+            <Link href={`/site/${slug}/properties?for=buy`} className="hover:text-slate-900">
               Buy
             </Link>
-            <Link href="/site/properties?for=rent" className="hover:text-slate-900">
+            <Link href={`/site/${slug}/properties?for=rent`} className="hover:text-slate-900">
               Rent
             </Link>
-            <Link href="/site#about" className="hover:text-slate-900">
+            <Link href={`/site/${slug}#about`} className="hover:text-slate-900">
               About
             </Link>
-            <Link href="/site#contact" className="hover:text-slate-900">
+            <Link href={`/site/${slug}#contact`} className="hover:text-slate-900">
               Contact
             </Link>
           </nav>
@@ -123,17 +128,17 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             <p className="text-sm font-semibold uppercase tracking-wider text-slate-300">Explore</p>
             <ul className="mt-4 space-y-2.5 text-sm">
               <li>
-                <Link href="/site/properties?for=buy" className="hover:text-white">
+                <Link href={`/site/${slug}/properties?for=buy`} className="hover:text-white">
                   Properties for sale
                 </Link>
               </li>
               <li>
-                <Link href="/site/properties?for=rent" className="hover:text-white">
+                <Link href={`/site/${slug}/properties?for=rent`} className="hover:text-white">
                   Properties for rent
                 </Link>
               </li>
               <li>
-                <Link href="/site#enquire" className="hover:text-white">
+                <Link href={`/site/${slug}#enquire`} className="hover:text-white">
                   Post your requirement
                 </Link>
               </li>
@@ -148,4 +153,16 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       </footer>
     </div>
   );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function generateMetadata(props: any): Promise<Metadata> {
+  const { slug } = await props.params;
+  return withSite(slug, () => generateMetadataInSite());
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default async function SiteLayout(props: any) {
+  const { slug } = await props.params;
+  return withSite(slug, () => SiteLayoutInSite(props));
 }

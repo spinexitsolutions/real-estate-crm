@@ -1,20 +1,14 @@
 import { runPaymentReminders } from "./payment-reminders";
 import "server-only";
+import { orgAccess } from "./tenancy";
 import { endOfDay, format, startOfDay, subDays } from "date-fns";
-import { db } from "./db";
+import { db, rawDb, runAsTenant } from "./db";
 import { notifyUser } from "./notify";
 import { appUrl, emailLayout, escapeHtml, isEmailConfigured, sendEmail } from "./email";
 import { sendWhatsAppTemplate } from "./whatsapp-digest";
 import { normalizePhone } from "./utils";
 import { FOLLOWUP_TYPES, OPEN_LEAD_STATUSES, labelOf } from "./constants";
 import { formatTime } from "./format";
-
-export type ReminderRunResult = {
-  remindersSent: number;
-  digest: { ran: boolean; reason?: string; emails: number; whatsapp: number; skipped: number };
-  cleanup: { loginAttempts: number; resetTokens: number };
-  payments: Awaited<ReturnType<typeof runPaymentReminders>>;
-};
 
 /** (a) Push reminders for follow-ups due soon. */
 export async function sendDueReminders(now = new Date()) {
@@ -44,7 +38,7 @@ export async function sendDueReminders(now = new Date()) {
 /** (b) Daily digest by email (and WhatsApp template when configured). Runs once per day after 08:00 app time. */
 export async function sendDailyDigest(now = new Date(), opts: { force?: boolean; origin?: string } = {}) {
   const result = { ran: false, reason: undefined as string | undefined, emails: 0, whatsapp: 0, skipped: 0 };
-  const settings = await db.settings.findUnique({ where: { id: 1 } });
+  const settings = await db.settings.findFirst();
   if (!settings) return { ...result, reason: "No settings" };
   const today = format(now, "yyyy-MM-dd");
   if (!opts.force) {
@@ -57,7 +51,7 @@ export async function sendDailyDigest(now = new Date(), opts: { force?: boolean;
 
   // Claim today's run first so concurrent cron calls don't double-send.
   const claimed = await db.settings.updateMany({
-    where: { id: 1, OR: [{ lastDigestDate: null }, { lastDigestDate: { not: today } }] },
+    where: { OR: [{ lastDigestDate: null }, { lastDigestDate: { not: today } }] },
     data: { lastDigestDate: today },
   });
   if (!claimed.count && !opts.force) return { ...result, reason: "Already sent today" };
@@ -126,17 +120,48 @@ export async function sendDailyDigest(now = new Date(), opts: { force?: boolean;
 /** (c) Housekeeping. */
 export async function cleanupSecurityTables(now = new Date()) {
   const [a, t] = await Promise.all([
-    db.loginAttempt.deleteMany({ where: { createdAt: { lt: subDays(now, 1) } } }),
-    db.passwordResetToken.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }] } }),
+    rawDb.loginAttempt.deleteMany({ where: { createdAt: { lt: subDays(now, 1) } } }),
+    rawDb.passwordResetToken.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }] } }),
   ]);
   return { loginAttempts: a.count, resetTokens: t.count };
 }
 
-export async function runReminderJobs(opts: { origin?: string } = {}): Promise<ReminderRunResult> {
-  const now = new Date();
+/** Reminder jobs for the organization in the current tenant context. */
+export async function runOrgReminderJobs(now = new Date(), opts: { origin?: string } = {}) {
   const remindersSent = await sendDueReminders(now);
   const digest = await sendDailyDigest(now, { origin: opts.origin });
   const payments = await runPaymentReminders(now);
+  return { remindersSent, digest, payments };
+}
+
+/**
+ * Cron entry point: runs reminder jobs for every organization that is allowed to use the app
+ * (trial, active, or within its paid period), each inside its own tenant context.
+ * One failing organization never stops the others.
+ */
+export async function runReminderJobs(opts: { origin?: string } = {}) {
+  const now = new Date();
+  const orgs = await rawDb.organization.findMany({
+    where: { status: { in: ["TRIAL", "ACTIVE", "PAST_DUE", "CANCELLED"] } },
+    select: { id: true, name: true, status: true, trialEndsAt: true, currentPeriodEnd: true },
+  });
+  const totals = { organizations: 0, skipped: 0, remindersSent: 0, digestEmails: 0, paymentReminders: 0, errors: [] as string[] };
+  for (const org of orgs) {
+    if (orgAccess(org, now).readOnly) {
+      totals.skipped++;
+      continue;
+    }
+    try {
+      const r = await runAsTenant(org.id, () => runOrgReminderJobs(now, opts));
+      totals.organizations++;
+      totals.remindersSent += r.remindersSent;
+      totals.digestEmails += r.digest.emails;
+      totals.paymentReminders += r.payments.agentNotified;
+    } catch (e) {
+      console.error(`Reminder jobs failed for ${org.name}`, e);
+      totals.errors.push(`${org.name}: ${(e as Error).message}`);
+    }
+  }
   const cleanup = await cleanupSecurityTables(now);
-  return { remindersSent, digest, payments, cleanup };
+  return { ...totals, cleanup };
 }

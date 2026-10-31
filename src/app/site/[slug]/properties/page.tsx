@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { ChevronLeft, ChevronRight, SearchX } from "lucide-react";
 import { db } from "@/lib/db";
 import { getSite, publicCities, publicSelect, publicWhere } from "@/lib/site";
+import { siteSlug, withSite } from "@/lib/site";
 import { ListingCard } from "@/components/site/listing-card";
 import { SearchForm } from "@/components/site/search-form";
 import { PROPERTY_TYPES, labelOf } from "@/lib/constants";
@@ -11,13 +12,17 @@ import { cn } from "@/lib/utils";
 type SP = { for?: string; city?: string; type?: string; budget?: string; bhk?: string; q?: string; page?: string; sort?: string };
 const PAGE_SIZE = 12;
 
-export async function generateMetadata({ searchParams }: { searchParams: Promise<SP> }) {
+async function generateMetadataInSite({ searchParams }: { searchParams: Promise<SP> }) {
+  const slug = siteSlug();
+  void slug;
   const sp = await searchParams;
   const what = sp.type ? labelOf(PROPERTY_TYPES, sp.type) : "Properties";
   return { title: `${what} for ${sp.for === "rent" ? "rent" : "sale"}${sp.city ? ` in ${sp.city}` : ""}` };
 }
 
-export default async function SiteListings({ searchParams }: { searchParams: Promise<SP> }) {
+async function SiteListingsInSite({ searchParams }: { searchParams: Promise<SP> }) {
+  const slug = siteSlug();
+  void slug;
   const site = await getSite();
   if (!site.enabled) return null;
   const sp = await searchParams;
@@ -46,7 +51,7 @@ export default async function SiteListings({ searchParams }: { searchParams: Pro
     const q = new URLSearchParams();
     for (const [k, v] of Object.entries({ ...sp, ...patch })) if (v) q.set(k, String(v));
     const s = q.toString();
-    return s ? `/site/properties?${s}` : "/site/properties";
+    return s ? `/site/${slug}/properties?${s}` : `/site/${slug}/properties`;
   };
 
   return (
@@ -58,7 +63,7 @@ export default async function SiteListings({ searchParams }: { searchParams: Pro
       <p className="mt-1 text-slate-500">{total} {total === 1 ? "property" : "properties"} found</p>
 
       <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
-        <SearchForm cities={cities} values={sp} compact />
+        <SearchForm slug={slug} cities={cities} values={sp} compact />
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
@@ -83,14 +88,14 @@ export default async function SiteListings({ searchParams }: { searchParams: Pro
           <SearchX className="size-10 text-slate-300" />
           <p className="mt-3 font-semibold text-slate-900">No properties match your search</p>
           <p className="mt-1 max-w-sm text-sm text-slate-500">Try removing a filter, or share your requirement and we will find options for you.</p>
-          <Link href="/site#enquire" className="mt-5 inline-flex h-10 items-center rounded-xl bg-[var(--brand)] px-4 text-sm font-semibold text-white hover:brightness-110">
+          <Link href={`/site/${slug}#enquire`} className="mt-5 inline-flex h-10 items-center rounded-xl bg-[var(--brand)] px-4 text-sm font-semibold text-white hover:brightness-110">
             Share my requirement
           </Link>
         </div>
       ) : (
         <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((p) => (
-            <ListingCard key={p.id} p={p} currency={site.currency} />
+            <ListingCard key={p.id} slug={slug} p={p} currency={site.currency} />
           ))}
         </div>
       )}
@@ -114,4 +119,16 @@ export default async function SiteListings({ searchParams }: { searchParams: Pro
       )}
     </div>
   );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function generateMetadata(props: any) {
+  const { slug } = await props.params;
+  return withSite(slug, () => generateMetadataInSite(props));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default async function SiteListings(props: any) {
+  const { slug } = await props.params;
+  return withSite(slug, () => SiteListingsInSite(props));
 }

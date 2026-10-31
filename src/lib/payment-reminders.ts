@@ -19,7 +19,7 @@ const inr = (n: number) => `Rs. ${new Intl.NumberFormat("en-IN", { maximumFracti
  * Safe to run every few minutes; each installment is reminded at most once every 3 days.
  */
 export async function runPaymentReminders(now: Date = new Date()) {
-  const settings = await db.settings.findUnique({ where: { id: 1 } });
+  const settings = await db.settings.findFirst();
   const due = await db.paymentInstallment.findMany({
     where: {
       status: { in: ["PENDING", "PARTIAL"] },

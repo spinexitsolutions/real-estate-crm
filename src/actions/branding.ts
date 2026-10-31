@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, requireOrgId } from "@/lib/db";
 import { optStr, str } from "@/lib/utils";
 import type { ActionResult } from "@/lib/action";
 
@@ -12,7 +12,7 @@ async function guard() {
 }
 
 async function upsert(data: Record<string, unknown>) {
-  await db.settings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
+  await db.settings.upsert({ where: { organizationId: await requireOrgId() }, create: { ...data }, update: data });
   revalidatePath("/", "layout");
   revalidatePath("/site", "layout");
 }

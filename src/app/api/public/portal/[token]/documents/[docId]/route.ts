@@ -1,3 +1,4 @@
+import { withPortal } from "@/lib/portal-access";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { documentResponse } from "@/lib/doc-storage";
@@ -6,7 +7,7 @@ import { isPortalUnlocked } from "@/lib/portal-session";
 export const runtime = "nodejs";
 
 /** Customer portal document access: only documents explicitly shared with the customer. */
-export async function GET(req: Request, { params }: { params: Promise<{ token: string; docId: string }> }) {
+async function GETInPortal(req: Request, { params }: { params: Promise<{ token: string; docId: string }> }) {
   const { token, docId } = await params;
   if (!token || token.length < 20) return new Response("Not found", { status: 404 });
   const access = await db.portalAccess.findUnique({ where: { token } });
@@ -29,4 +30,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     console.error("Portal document download failed", e);
     return new Response("Could not open the document", { status: 500 });
   }
+}
+
+export async function GET(req: Request, ctx: { params: Promise<{ token: string; docId: string }> }) {
+  const { token } = await ctx.params;
+  return withPortal(token, () => GETInPortal(req, ctx), () => new Response("This link is no longer valid", { status: 404 }));
 }

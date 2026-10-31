@@ -1,3 +1,4 @@
+import { rawDb, runAsTenant } from "@/lib/db";
 import { getBrochureData, pdfResponse, renderBrochure } from "@/lib/brochure";
 import { originFrom, verifyBrochureSig } from "@/lib/brochure-link";
 
@@ -7,7 +8,7 @@ export const runtime = "nodejs";
  * Public brochure link (no login) used when sharing on WhatsApp.
  * Allowed when the property is published on the website, or when the link carries a valid signature.
  */
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function GETInOrg(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const url = new URL(req.url);
   const data = await getBrochureData(id);
@@ -21,4 +22,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     console.error("Public brochure render failed", e);
     return new Response("Could not generate the brochure. Please try again.", { status: 500 });
   }
+}
+
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const owner = await rawDb.property.findUnique({ where: { id }, select: { organizationId: true } });
+  if (!owner) return new Response("Brochure not found", { status: 404 });
+  return runAsTenant(owner.organizationId, () => GETInOrg(req, ctx));
 }

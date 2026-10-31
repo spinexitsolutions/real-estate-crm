@@ -3,7 +3,7 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, requireOrgId } from "@/lib/db";
 import { optNum, optStr, str } from "@/lib/utils";
 import type { ActionResult } from "@/lib/action";
 
@@ -15,7 +15,7 @@ async function guard() {
 }
 
 async function upsert(data: Record<string, unknown>) {
-  await db.settings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
+  await db.settings.upsert({ where: { organizationId: await requireOrgId() }, create: { ...data }, update: data });
   revalidatePath("/", "layout");
 }
 
@@ -46,7 +46,7 @@ export async function saveWhatsApp(fd: FormData): Promise<ActionResult> {
   const waApiEnabled = fd.get("waApiEnabled") === "on";
   const waPhoneNumberId = optStr(fd, "waPhoneNumberId");
   const tokenInput = str(fd, "waAccessToken");
-  const current = await db.settings.findUnique({ where: { id: 1 } });
+  const current = await db.settings.findFirst();
   const waAccessToken = tokenInput || current?.waAccessToken || null;
   if (waApiEnabled && (!waPhoneNumberId || !waAccessToken)) {
     return { error: "Phone number ID and access token are required to enable the API." };
@@ -73,7 +73,7 @@ export async function savePaymentSettings(fd: FormData): Promise<ActionResult> {
   if (!receiptPrefix) return { error: "Receipt prefix is required." };
   const next = optNum(fd, "nextReceiptNo");
   if (next !== null && (!Number.isInteger(next) || next < 1)) return { error: "Next receipt number must be a positive whole number." };
-  const current = await db.settings.findUnique({ where: { id: 1 }, select: { nextReceiptNo: true } });
+  const current = await db.settings.findFirst({ select: { nextReceiptNo: true } });
   if (next !== null && current && next < current.nextReceiptNo) {
     // Never allow reusing receipt numbers that may already be issued
     const clash = await db.payment.findFirst({ where: { receiptNo: `${receiptPrefix}-${next}` } });

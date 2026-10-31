@@ -9,10 +9,10 @@ const sel =
   "h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 fill=%22none%22 stroke=%22%2364748b%22 stroke-width=%222%22 viewBox=%220 0 24 24%22><path d=%22m6 9 6 6 6-6%22/></svg>')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat px-3.5 pr-9 text-sm text-slate-800 outline-none focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand)]/10";
 
 /** Plain GET search form (works without JavaScript). */
-export function SearchForm({ cities, values = {}, compact }: { cities: string[]; values?: SP; compact?: boolean }) {
+export function SearchForm({ slug, cities, values = {}, compact }: { slug: string; cities: string[]; values?: SP; compact?: boolean }) {
   const rent = values.for === "rent";
   return (
-    <form action="/site/properties" method="get" className={cn("grid gap-2.5", compact ? "sm:grid-cols-2 lg:grid-cols-6" : "rounded-2xl bg-white p-3 shadow-pop sm:grid-cols-2 lg:grid-cols-[repeat(5,1fr)_auto]")}>
+    <form action={`/site/${slug}/properties`} method="get" className={cn("grid gap-2.5", compact ? "sm:grid-cols-2 lg:grid-cols-6" : "rounded-2xl bg-white p-3 shadow-pop sm:grid-cols-2 lg:grid-cols-[repeat(5,1fr)_auto]")}>
       <select name="for" defaultValue={values.for ?? "buy"} className={sel} aria-label="Buy or rent">
         <option value="buy">Buy</option>
         <option value="rent">Rent</option>

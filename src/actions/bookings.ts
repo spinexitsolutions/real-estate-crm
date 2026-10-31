@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
-import { db } from "@/lib/db";
+import { db, requireOrgId } from "@/lib/db";
 import { isManager, requireUser, type CurrentUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import type { ActionResult } from "@/lib/action";
@@ -353,7 +353,7 @@ export async function recordPayment(installmentId: string, fd: FormData): Promis
 
   const payment = await db.$transaction(async (tx) => {
     // Atomic increment guarantees unique, gap-free receipt numbers even with simultaneous users.
-    const st = await tx.settings.update({ where: { id: 1 }, data: { nextReceiptNo: { increment: 1 } } });
+    const st = await tx.settings.update({ where: { organizationId: await requireOrgId() }, data: { nextReceiptNo: { increment: 1 } } });
     const receiptNo = `${st.receiptPrefix}-${st.nextReceiptNo - 1}`;
     return tx.payment.create({
       data: { receiptNo, bookingId: i.bookingId, installmentId: i.id, amount, paidAt, method, reference, notes, recordedById: user.id },

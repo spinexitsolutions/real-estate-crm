@@ -18,7 +18,7 @@ function Submit() {
   );
 }
 
-export function EnquiryForm({ propertyId, defaultMessage, showVisitDate = true }: { propertyId?: string; defaultMessage?: string; showVisitDate?: boolean }) {
+export function EnquiryForm({ slug, propertyId, defaultMessage, showVisitDate = true }: { slug: string; propertyId?: string; defaultMessage?: string; showVisitDate?: boolean }) {
   const [state, action] = useActionState(submitEnquiry, undefined);
   if (state?.ok)
     return (
@@ -31,6 +31,7 @@ export function EnquiryForm({ propertyId, defaultMessage, showVisitDate = true }
   const today = new Date().toISOString().slice(0, 10);
   return (
     <form action={action} className="space-y-3">
+      <input type="hidden" name="site" value={slug} />
       {propertyId && <input type="hidden" name="propertyId" value={propertyId} />}
       <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
         <label>

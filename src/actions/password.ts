@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import { rawDb, runAsTenant } from "@/lib/db";
 import { appUrl, emailLayout, escapeHtml, isEmailConfigured, sendEmail } from "@/lib/email";
 import { getSettings } from "@/lib/settings";
 import { str } from "@/lib/utils";
@@ -21,17 +21,17 @@ export async function requestPasswordReset(_: PasswordFormState, fd: FormData): 
     return { error: "Email is not set up for this workspace. Ask your administrator to reset your password from the Team page." };
   }
 
-  const user = await db.user.findUnique({ where: { email } });
+  const user = await rawDb.user.findUnique({ where: { email } });
   if (user && user.active) {
     // Throttle: at most 3 reset emails per hour per user
-    const recent = await db.passwordResetToken.count({ where: { userId: user.id, createdAt: { gte: new Date(Date.now() - 3600000) } } });
+    const recent = await rawDb.passwordResetToken.count({ where: { userId: user.id, createdAt: { gte: new Date(Date.now() - 3600000) } } });
     if (recent < 3) {
       const token = randomBytes(32).toString("hex");
-      await db.passwordResetToken.create({ data: { tokenHash: hash(token), userId: user.id, expiresAt: new Date(Date.now() + 3600000) } });
+      await rawDb.passwordResetToken.create({ data: { tokenHash: hash(token), userId: user.id, expiresAt: new Date(Date.now() + 3600000) } });
       const h = await headers();
       const origin = h.get("origin") || (h.get("host") ? `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}` : undefined);
       const link = `${appUrl(origin)}/reset-password?token=${token}`;
-      const settings = await getSettings();
+      const settings = await runAsTenant(user.organizationId, () => getSettings());
       await sendEmail({
         to: user.email,
         subject: "Reset your EstateDesk password",
@@ -55,21 +55,21 @@ export async function resetPassword(_: PasswordFormState, fd: FormData): Promise
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   if (password !== confirm) return { error: "Passwords do not match." };
 
-  const record = await db.passwordResetToken.findUnique({ where: { tokenHash: hash(token) }, include: { user: true } });
+  const record = await rawDb.passwordResetToken.findUnique({ where: { tokenHash: hash(token) }, include: { user: true } });
   if (!record || record.usedAt || record.expiresAt < new Date() || !record.user.active) {
     return { error: "This reset link has expired or was already used. Please request a new one." };
   }
-  await db.$transaction([
-    db.user.update({ where: { id: record.userId }, data: { password: await bcrypt.hash(password, 10) } }),
-    db.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
-    db.passwordResetToken.deleteMany({ where: { userId: record.userId, id: { not: record.id } } }),
-    db.loginAttempt.deleteMany({ where: { key: `email:${record.user.email}` } }),
+  await rawDb.$transaction([
+    rawDb.user.update({ where: { id: record.userId }, data: { password: await bcrypt.hash(password, 10) } }),
+    rawDb.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    rawDb.passwordResetToken.deleteMany({ where: { userId: record.userId, id: { not: record.id } } }),
+    rawDb.loginAttempt.deleteMany({ where: { key: `email:${record.user.email}` } }),
   ]);
   redirect("/login?reset=1");
 }
 
 export async function isResetTokenValid(token: string) {
   if (!token) return false;
-  const record = await db.passwordResetToken.findUnique({ where: { tokenHash: hash(token) }, select: { usedAt: true, expiresAt: true } });
+  const record = await rawDb.passwordResetToken.findUnique({ where: { tokenHash: hash(token) }, select: { usedAt: true, expiresAt: true } });
   return !!record && !record.usedAt && record.expiresAt > new Date();
 }

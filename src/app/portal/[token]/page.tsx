@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { CalendarClock, CircleCheck, Download, FileText, Mail, MapPin, Phone, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
-import { getPortalAccess } from "@/lib/portal-access";
+import { getPortalAccess, withPortal } from "@/lib/portal-access";
 import { DOCUMENT_CATEGORIES, labelOf } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { effectiveStatus, summarizeInstallments } from "@/lib/payment-plan";
@@ -30,7 +30,7 @@ function formatSize(n: number) {
   return n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 }
 
-export default async function PortalPage({ params }: { params: Promise<{ token: string }> }) {
+async function PortalPageInPortal({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const portal = await getPortalAccess(token);
   const settings = await getSettings();
@@ -294,4 +294,9 @@ function Tile({ label, value, tone }: { label: string; value: string; tone?: str
       <p className="text-[11px] text-slate-500">{label}</p>
     </div>
   );
+}
+
+export default async function PortalPage(props: { params: Promise<{ token: string }> }) {
+  const { token } = await props.params;
+  return withPortal(token, () => PortalPageInPortal(props), () => notFound());
 }

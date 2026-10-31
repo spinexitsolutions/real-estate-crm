@@ -30,7 +30,7 @@ function e164(phone: string, cc: string) {
 }
 
 export async function startClickToCall({ agentPhone, customerPhone, callbackUrl }: { agentPhone: string; customerPhone: string; callbackUrl: string }): Promise<ClickToCallResult> {
-  const s = await db.settings.findUnique({ where: { id: 1 } });
+  const s = await db.settings.findFirst();
   const status = telephonyStatus(s);
   if (!s || !status.enabled) return { ok: false, error: status.reason ?? "Click-to-call is not configured." };
   const cc = s.defaultCountryCode || "91";
