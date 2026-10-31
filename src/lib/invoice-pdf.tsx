@@ -1,4 +1,5 @@
 import "server-only";
+import { BRAND } from "./brand";
 import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { splitGstInclusive } from "./billing-core";
 import { formatDate } from "./format";
@@ -8,7 +9,7 @@ const inr = (n: number) => `Rs. ${new Intl.NumberFormat("en-IN", { minimumFracti
 
 export function platformSeller() {
   return {
-    name: process.env.PLATFORM_LEGAL_NAME || process.env.NEXT_PUBLIC_APP_NAME || "EstateDesk",
+    name: process.env.PLATFORM_LEGAL_NAME || process.env.NEXT_PUBLIC_APP_NAME || BRAND.name,
     gstin: process.env.PLATFORM_GSTIN || null,
     address: process.env.PLATFORM_ADDRESS || null,
     state: process.env.PLATFORM_STATE || null,

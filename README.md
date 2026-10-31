@@ -32,7 +32,7 @@ A real estate CRM built with Next.js and Supabase to manage leads and follow-ups
 - **Customer portal**: a private link (optional PIN) where the buyer sees their booking, payment schedule, receipts and shared documents.
 - **Documents**: KYC (PAN, Aadhaar, photo), agreements, sale deeds and receipts per lead or booking, in a private Supabase bucket. Files can be previewed, downloaded and shared with the customer.
 - **Property brochure PDF**: company logo, brand colour, photos, specs and agent contact (never owner details). Can be shared on WhatsApp as a signed link.
-- **Public website** (`/site`): home page, search, property pages with enquiry form and brochure download. Only published listings appear, and enquiries become leads automatically.
+- **Public website** (`/site/<company-slug>`): home page, search, property pages with enquiry form and brochure download. Only published listings appear, and enquiries become leads automatically.
 - **Portal integrations**:
   - Facebook and Instagram Lead Ads (webhook).
   - 99acres, MagicBricks and Housing.com lead push URLs.
@@ -60,6 +60,54 @@ A real estate CRM built with Next.js and Supabase to manage leads and follow-ups
   - Global search (Ctrl + K) and EMI calculator.
   - Installable as an app on phones (PWA).
   - One business timezone for everyone (default India).
+
+## Running it as a SaaS (multi-company)
+
+EstateDesk is multi-tenant: many companies sign up and use the same deployment, each with completely separate data.
+
+- **Data isolation:**
+  - Every business table has an `organizationId`, and the app's database client (`src/lib/db.ts`) scopes every query to the signed-in company automatically.
+  - It rejects writes that reference another company's records, and throws instead of returning data when no company context exists.
+  - Inserts without a company also fail at the database level.
+  - `npm run test:isolation` verifies all of this.
+- **Sign-up and trial:**
+  - `/signup` creates a company on a free trial (`TRIAL_DAYS`, default 14) with its admin user and starter templates, then opens the setup wizard at `/onboarding`.
+- **Plans and limits:**
+  - Plans (users, leads and properties limits, plus features) are managed in **/admin > Plans**.
+  - Features a plan does not include are hidden or show an upgrade screen.
+  - Leads from webhooks, the website and portals are never dropped, even over a limit.
+- **Billing (Razorpay subscriptions):**
+  1. Set the `RAZORPAY_*` env vars.
+  2. Run `npm run razorpay:sync-plans`.
+  3. Add the webhook `https://your-domain/api/webhooks/razorpay`.
+  - Customers subscribe from **Plan & Billing** and get GST tax invoices.
+  - Without Razorpay keys, customers are asked to contact you, and you activate plans from /admin.
+- **Read-only mode:**
+  - When a trial ends or a subscription lapses (after a 3-day grace period for failed payments), the company can still sign in, view and export, but cannot change anything until it subscribes.
+  - Incoming leads keep arriving.
+  - Suspended companies see a "contact support" screen.
+- **Super admin panel (`/admin`):**
+  - Only for emails in `SUPER_ADMIN_EMAILS`.
+  - Shows MRR, ARR, sign-ups, trial conversion and churn.
+  - From each company's page you can extend a trial, activate (paid offline), change plan, suspend or delete it, and record invoices.
+  - **Login as** lets you see a company exactly as a user does, for support; it is recorded in the audit log.
+  - Plans and invoices are managed here too.
+- **Marketing site:** landing page `/`, `/pricing` (plans read from the database), `/contact`, and legal pages `/terms`, `/privacy` and `/refund-policy`. Razorpay requires these for merchant approval; they show a "template" note until you set `NEXT_PUBLIC_LEGAL_NAME`.
+- **Branding:** set `NEXT_PUBLIC_APP_NAME` and the other `NEXT_PUBLIC_*` values to rebrand the product. Each customer company also sets its own logo and colour.
+- **Per-company URLs:**
+  - Public website: `/site/<company-slug>`
+  - Customer portal: `/portal/<token>`
+  - Lead and telephony webhooks: identified by each company's secret key
+  - WhatsApp and Facebook webhooks: use `?org=<company id>` (shown in Settings and Integrations)
+
+### Go-live checklist
+1. Create a Supabase project and set the database and storage variables, then run `npm run setup:empty`.
+2. Deploy on Vercel with every variable from `.env.example`, including `SUPER_ADMIN_EMAILS` and a strong `AUTH_SECRET`.
+3. Sign up your own company at `/signup` with an email listed in `SUPER_ADMIN_EMAILS`, then open `/admin`.
+4. Set your prices in /admin > Plans.
+5. Add your Razorpay keys, run `npm run razorpay:sync-plans`, and add the Razorpay webhook.
+6. Set your legal name, address, GSTIN and support contacts, and review the legal pages with your lawyer.
+7. Run `docs/SUPABASE_CRON.sql` (every-5-minute reminders) and configure SMTP and the VAPID keys.
 
 ## Tech stack
 
@@ -114,15 +162,16 @@ npm run build
 npm start
 ```
 
-Demo logins (after `npm run setup`), all with password `admin123`:
+Demo logins (after `npm run setup`), all with password `admin123`. Add `admin@estatedesk.com` to `SUPER_ADMIN_EMAILS` to open /admin:
 
 | Role    | Email                   |
 |---------|-------------------------|
 | Admin   | admin@estatedesk.com    |
 | Manager | manager@estatedesk.com  |
 | Agent   | rohan@estatedesk.com    |
+| Second company (trial), for checking isolation | owner@harbourhomes.in |
 
-With an empty database, open `/register` to create the first admin account.
+With an empty database, open `/signup` to create the first company.
 
 ## Deploying to Vercel
 

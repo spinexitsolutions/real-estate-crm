@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { yearlySavingPercent } from "@/lib/billing-core";
 
 type PlanCard = {
   id: string;
@@ -28,6 +27,11 @@ type PlanCard = {
 };
 
 type Cycle = "MONTHLY" | "YEARLY";
+
+function yearlySavingPercent(monthly: number, yearly: number) {
+  if (!monthly || !yearly) return 0;
+  return Math.max(0, Math.round((1 - yearly / (monthly * 12)) * 100));
+}
 
 type RazorpayResponse = { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string };
 type RazorpayInstance = { open: () => void; on: (event: string, cb: (r: { error?: { description?: string } }) => void) => void };

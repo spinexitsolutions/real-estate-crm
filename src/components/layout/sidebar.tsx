@@ -1,4 +1,5 @@
 "use client";
+import { BRAND } from "@/lib/brand";
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -37,7 +38,7 @@ export function SidebarContent({
           <LogoMark className="size-8" />
         )}
         <div className="min-w-0">
-          <p className="text-[15px] font-semibold leading-tight text-white">EstateDesk</p>
+          <p className="text-[15px] font-semibold leading-tight text-white">{BRAND.name}</p>
           <p className="truncate text-[11px] text-slate-400">{company}</p>
         </div>
       </div>

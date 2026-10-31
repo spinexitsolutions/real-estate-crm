@@ -125,7 +125,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       steps: [
         "Share this URL with your 99acres account manager and ask them to enable lead push to your CRM.",
         "Alternatively, forward 99acres lead emails to the email parser below.",
-        "When a listing id matches a property code in EstateDesk, the property is shortlisted on the lead.",
+        "When a listing id matches a property code in the CRM, the property is shortlisted on the lead.",
       ],
     },
     {

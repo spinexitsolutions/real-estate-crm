@@ -15,8 +15,7 @@ import {
   Settings,
   UserCog,
   Users,
-  Handshake,
-} from "lucide-react";
+  Handshake, Rocket, ShieldCheck } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { Avatar } from "@/components/ui/avatar";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -53,6 +52,8 @@ export function AppShell({
   statusBanner,
   suspendedScreen,
   topBanner,
+  isSuperAdmin = false,
+  needsOnboarding = false,
   children,
 }: {
   user: { name: string; email: string; role: string };
@@ -71,6 +72,10 @@ export function AppShell({
   suspendedScreen?: React.ReactNode;
   /** Extra banner above everything, e.g. "You are viewing as ..." during super admin impersonation. */
   topBanner?: React.ReactNode;
+  /** Platform owner: shows a link to the /admin panel in the user menu. */
+  isSuperAdmin?: boolean;
+  /** Company admin who has not finished the setup wizard yet. */
+  needsOnboarding?: boolean;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -203,6 +208,8 @@ export function AppShell({
                   <div className="py-1">
                     <QuickLink href="/profile" icon={UserCog} label="My profile" onClick={close} />
                     {user.role === "ADMIN" && <QuickLink href="/settings" icon={Settings} label="Settings" onClick={close} />}
+                    {needsOnboarding && <QuickLink href="/onboarding" icon={Rocket} label="Finish setup" onClick={close} />}
+                    {isSuperAdmin && <QuickLink href="/admin" icon={ShieldCheck} label="Admin panel" onClick={close} />}
                   </div>
                   <form action={logout} className="border-t border-slate-100 pt-1">
                     <button type="submit" className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-rose-600 hover:bg-rose-50">

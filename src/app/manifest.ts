@@ -1,9 +1,10 @@
+import { BRAND } from "@/lib/brand";
 import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "EstateDesk CRM",
-    short_name: "EstateDesk",
+    name: `${BRAND.name} CRM`,
+    short_name: BRAND.name,
     description: "Real estate CRM to manage leads, properties and follow-ups.",
     start_url: "/dashboard",
     display: "standalone",

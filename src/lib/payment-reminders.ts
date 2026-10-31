@@ -1,4 +1,5 @@
 import "server-only";
+import { BRAND } from "./brand";
 import { addDays, endOfDay, startOfDay, subDays } from "date-fns";
 import { db } from "./db";
 import { notifyUser } from "./notify";
@@ -68,7 +69,7 @@ export async function runPaymentReminders(now: Date = new Date()) {
         to: lead.email,
         subject: `${overdue ? "Payment overdue" : "Payment reminder"}: ${i.label} - ${i.booking.bookingNo}`,
         html: emailLayout({
-          company: settings?.companyName ?? "EstateDesk",
+          company: settings?.companyName ?? BRAND.name,
           heading: overdue ? "Your payment is overdue" : "Upcoming payment reminder",
           body: `<p>Dear ${escapeHtml(firstName)},</p>
 <p>This is a gentle reminder that the following payment for <strong>${escapeHtml(property)}</strong>${i.booking.unitNumber ? ` (Unit ${escapeHtml(i.booking.unitNumber)})` : ""} ${overdue ? "was due" : "is due"} on <strong>${formatDate(i.dueDate)}</strong>.</p>

@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import Link from "next/link";
 import { addDays, format, startOfMonth, startOfWeek, subMonths, subWeeks } from "date-fns";
 import { AlertTriangle, Building2, CircleDollarSign, Clock, Hourglass, Repeat, TrendingUp, UserPlus } from "lucide-react";
@@ -82,7 +83,7 @@ export default async function AdminOverview() {
   const mrrByPlan = [...byPlan.entries()].map(([label, value]) => ({ label, value: Math.round(value) }));
 
   const nudgeText = (o: { ownerName: string | null; trialEndsAt: Date | null }) =>
-    `Hi ${o.ownerName?.split(" ")[0] ?? ""}, your EstateDesk free trial ends on ${formatDate(o.trialEndsAt)}. Can I help you set up anything or choose a plan so your team keeps working without interruption?`;
+    `Hi ${o.ownerName?.split(" ")[0] ?? ""}, your ${BRAND.name} free trial ends on ${formatDate(o.trialEndsAt)}. Can I help you set up anything or choose a plan so your team keeps working without interruption?`;
 
   return (
     <div className="space-y-6">

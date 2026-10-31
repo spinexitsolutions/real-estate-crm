@@ -17,7 +17,8 @@
     "postinstall": "prisma generate",
     "vapid": "node scripts/generate-vapid.mjs",
     "test": "vitest run",
-    "test:isolation": "tsx scripts/check-isolation.ts"
+    "test:isolation": "tsx scripts/check-isolation.ts",
+    "razorpay:sync-plans": "tsx scripts/sync-razorpay-plans.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

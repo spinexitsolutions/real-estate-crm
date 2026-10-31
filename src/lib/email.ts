@@ -1,4 +1,5 @@
 import "server-only";
+import { BRAND } from "./brand";
 import nodemailer, { type Transporter } from "nodemailer";
 
 export function isEmailConfigured() {
@@ -51,7 +52,7 @@ export function emailLayout({ company, heading, body, cta }: { company: string; 
 <div style="font-size:14px;line-height:22px;color:#334155">${body}</div>
 ${cta ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:24px"><tr><td style="background:#4f46e5;border-radius:8px"><a href="${escapeHtml(cta.url)}" style="display:inline-block;padding:11px 20px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600">${escapeHtml(cta.label)}</a></td></tr></table>` : ""}
 </td></tr>
-<tr><td style="padding:16px 28px;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8">Sent by EstateDesk CRM. You can change notification preferences from your profile.</td></tr>
+<tr><td style="padding:16px 28px;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8">Sent by ${BRAND.name} CRM. You can change notification preferences from your profile.</td></tr>
 </table></td></tr></table></body></html>`;
 }
 

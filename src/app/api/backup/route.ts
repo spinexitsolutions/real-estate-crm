@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import { NextResponse } from "next/server";
 import { format } from "date-fns";
 import { getCurrentUser } from "@/lib/auth";
@@ -37,7 +38,7 @@ export async function GET() {
   const now = new Date();
   const body = JSON.stringify(
     {
-      meta: { app: "EstateDesk CRM", version: 1, exportedAt: now.toISOString(), exportedBy: user.email, counts, note: "Password hashes, API secrets and customer portal tokens are excluded. Document files are stored in Supabase Storage (metadata only here)." },
+      meta: { app: `${BRAND.name} CRM`, version: 1, exportedAt: now.toISOString(), exportedBy: user.email, counts, note: "Password hashes, API secrets and customer portal tokens are excluded. Document files are stored in Supabase Storage (metadata only here)." },
       data,
     },
     null,

@@ -1,4 +1,5 @@
 "use server";
+import { BRAND } from "@/lib/brand";
 
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "crypto";
@@ -34,7 +35,7 @@ export async function requestPasswordReset(_: PasswordFormState, fd: FormData): 
       const settings = await runAsTenant(user.organizationId, () => getSettings());
       await sendEmail({
         to: user.email,
-        subject: "Reset your EstateDesk password",
+        subject: `Reset your ${BRAND.name} password`,
         html: emailLayout({
           company: settings.companyName,
           heading: "Reset your password",

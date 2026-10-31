@@ -1,6 +1,7 @@
 import { endOfDay } from "date-fns";
 import { AppShell } from "@/components/layout/app-shell";
-import { requireUser } from "@/lib/auth";
+import { isSuperAdminEmail, requireUser } from "@/lib/auth";
+import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { getOrgPlan, readOnlyReasonFor } from "@/lib/plans";
@@ -47,6 +48,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       suspendedScreen={
         access?.state === "suspended" ? <SuspendedScreen supportEmail={process.env.PLATFORM_SUPPORT_EMAIL} supportPhone={process.env.PLATFORM_SUPPORT_PHONE} /> : undefined
       }
+      topBanner={<ImpersonationBanner />}
+      isSuperAdmin={isSuperAdminEmail(user.email) && !user.impersonatorId}
+      needsOnboarding={isAdmin && !!org && !org.onboardedAt}
       followupCount={count}
       whatsappUnread={waUnread._sum.unreadMessages ?? 0}
       notifications={due.map((f) => ({

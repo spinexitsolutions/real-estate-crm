@@ -1,4 +1,5 @@
 "use server";
+import { BRAND } from "@/lib/brand";
 
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -20,7 +21,7 @@ export async function sendTestNotification(): Promise<ActionResult<{ push: numbe
     const settings = await getSettings();
     const r = await sendEmail({
       to: user.email,
-      subject: "EstateDesk test email",
+      subject: `${BRAND.name} test email`,
       html: emailLayout({ company: settings.companyName, heading: "Email is working", body: "<p style=\"margin:0\">This is a test email from your CRM. Daily digests and password reset emails will be delivered like this.</p>" }),
     });
     if (!r.ok) return { error: `Email failed: ${r.error}` };

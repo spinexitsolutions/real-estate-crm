@@ -1,4 +1,5 @@
 "use server";
+import { BRAND } from "@/lib/brand";
 
 import { randomBytes } from "crypto";
 import { headers } from "next/headers";
@@ -55,10 +56,10 @@ export async function ensureLeadWebhookKey(): Promise<ActionResult<{ key: string
 }
 
 const SAMPLES: Record<PortalKey, Record<string, string>> = {
-  "99acres": { SENDER_NAME: "Test Lead (99acres)", MOBILE: "", EMAIL: "test.99acres@example.com", QUERY_INFO: "Test enquiry sent from EstateDesk integrations page", CITY: "Pune", BUDGET: "80 Lac" },
-  magicbricks: { name: "Test Lead (MagicBricks)", mobile: "", email: "test.magicbricks@example.com", comment: "Test enquiry sent from EstateDesk integrations page", city: "Mumbai", budget: "1.2 Cr" },
-  housing: { name: "Test Lead (Housing.com)", phone: "", email: "test.housing@example.com", message: "Test enquiry sent from EstateDesk integrations page", locality: "Baner", city: "Pune" },
-  generic: { name: "Test Lead (Website)", phone: "", email: "test.website@example.com", message: "Test enquiry sent from EstateDesk integrations page" },
+  "99acres": { SENDER_NAME: "Test Lead (99acres)", MOBILE: "", EMAIL: "test.99acres@example.com", QUERY_INFO: `Test enquiry sent from ${BRAND.name} integrations page`, CITY: "Pune", BUDGET: "80 Lac" },
+  magicbricks: { name: "Test Lead (MagicBricks)", mobile: "", email: "test.magicbricks@example.com", comment: `Test enquiry sent from ${BRAND.name} integrations page`, city: "Mumbai", budget: "1.2 Cr" },
+  housing: { name: "Test Lead (Housing.com)", phone: "", email: "test.housing@example.com", message: `Test enquiry sent from ${BRAND.name} integrations page`, locality: "Baner", city: "Pune" },
+  generic: { name: "Test Lead (Website)", phone: "", email: "test.website@example.com", message: `Test enquiry sent from ${BRAND.name} integrations page` },
 };
 
 /** Sends a sample lead through the real portal endpoint so admins can verify the pipeline end to end. */
