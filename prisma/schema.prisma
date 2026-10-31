@@ -1,0 +1,225 @@
+// EstateDesk CRM database schema
+// Local / single server: SQLite (default). For production on PostgreSQL,
+// change provider to "postgresql" and set DATABASE_URL accordingly.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  password    String
+  phone       String?
+  role        String   @default("AGENT") // ADMIN | MANAGER | AGENT
+  active      Boolean  @default(true)
+  monthlyTarget Float  @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignedLeads   Lead[]     @relation("LeadAssignee")
+  createdLeads    Lead[]     @relation("LeadCreator")
+  properties      Property[]
+  followUps       FollowUp[]
+  activities      Activity[]
+  deals           Deal[]
+  messages        WhatsAppMessage[]
+}
+
+model Lead {
+  id                String    @id @default(cuid())
+  name              String
+  phone             String
+  alternatePhone    String?
+  email             String?
+  source            String    @default("WEBSITE")
+  status            String    @default("NEW")
+  priority          String    @default("WARM") // HOT | WARM | COLD
+  purpose           String    @default("BUY") // BUY | RENT | INVEST
+  propertyType      String?
+  preferredLocation String?
+  bedrooms          Int?
+  budgetMin         Float?
+  budgetMax         Float?
+  notes             String?
+  tags              String    @default("")
+  lostReason        String?
+  lastContactedAt   DateTime?
+  assignedToId      String?
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  assignedTo  User?             @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy   User?             @relation("LeadCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  followUps   FollowUp[]
+  activities  Activity[]
+  deals       Deal[]
+  interests   LeadProperty[]
+  messages    WhatsAppMessage[]
+
+  @@index([status])
+  @@index([assignedToId])
+  @@index([createdAt])
+}
+
+model Property {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  title        String
+  description  String?
+  type         String   @default("APARTMENT")
+  listingType  String   @default("SALE") // SALE | RENT
+  status       String   @default("AVAILABLE")
+  price        Float
+  area         Float?
+  areaUnit     String   @default("sqft")
+  bedrooms     Int?
+  bathrooms    Int?
+  furnishing   String?  // UNFURNISHED | SEMI | FULLY
+  address      String?
+  locality     String?
+  city         String
+  amenities    String   @default("")
+  images       String   @default("[]") // JSON array of image URLs
+  ownerName    String?
+  ownerPhone   String?
+  featured     Boolean  @default(false)
+  agentId      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  agent       User?          @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  interests   LeadProperty[]
+  deals       Deal[]
+  followUps   FollowUp[]
+  activities  Activity[]
+
+  @@index([status])
+  @@index([city])
+}
+
+model LeadProperty {
+  leadId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, propertyId])
+}
+
+model FollowUp {
+  id           String    @id @default(cuid())
+  title        String
+  type         String    @default("CALL") // CALL | MEETING | SITE_VISIT | WHATSAPP | EMAIL | OTHER
+  dueAt        DateTime
+  status       String    @default("PENDING") // PENDING | COMPLETED | CANCELLED
+  priority     String    @default("MEDIUM") // HIGH | MEDIUM | LOW
+  notes        String?
+  outcome      String?
+  completedAt  DateTime?
+  leadId       String
+  propertyId   String?
+  assignedToId String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  lead       Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  assignedTo User?     @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([dueAt])
+  @@index([status])
+}
+
+model Deal {
+  id                String    @id @default(cuid())
+  title             String
+  value             Float
+  commissionPct     Float     @default(2)
+  stage             String    @default("NEGOTIATION")
+  expectedCloseDate DateTime?
+  closedAt          DateTime?
+  notes             String?
+  leadId            String
+  propertyId        String?
+  agentId           String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  lead       Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  property   Property?  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  agent      User?      @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  activities Activity[]
+
+  @@index([stage])
+}
+
+model Activity {
+  id         String   @id @default(cuid())
+  type       String   // NOTE | CALL | EMAIL | WHATSAPP | STATUS | FOLLOWUP | CREATED | ASSIGNED | DEAL | PROPERTY | MEETING
+  content    String
+  leadId     String?
+  propertyId String?
+  dealId     String?
+  userId     String?
+  createdAt  DateTime @default(now())
+
+  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  deal     Deal?     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+model WhatsAppTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  category  String   @default("GENERAL") // GREETING | FOLLOW_UP | PROPERTY | SITE_VISIT | GENERAL | FESTIVE
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WhatsAppMessage {
+  id        String   @id @default(cuid())
+  phone     String
+  body      String
+  direction String   @default("OUT") // OUT | IN
+  channel   String   @default("LINK") // LINK | API
+  status    String   @default("SENT") // SENT | FAILED | OPENED
+  error     String?
+  leadId    String?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+model Settings {
+  id                 Int      @id @default(1)
+  companyName        String   @default("EstateDesk Realty")
+  companyPhone       String?
+  companyEmail       String?
+  companyAddress     String?
+  currency           String   @default("INR")
+  defaultCountryCode String   @default("91")
+  defaultCommission  Float    @default(2)
+  waApiEnabled       Boolean  @default(false)
+  waPhoneNumberId    String?
+  waAccessToken      String?
+  leadWebhookKey     String?
+  updatedAt          DateTime @updatedAt
+}

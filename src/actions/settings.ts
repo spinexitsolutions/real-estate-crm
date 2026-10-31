@@ -1,0 +1,63 @@
+"use server";
+
+import { randomBytes } from "crypto";
+import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { optNum, optStr, str } from "@/lib/utils";
+import type { ActionResult } from "@/lib/action";
+
+const CURRENCIES = ["INR", "USD", "AED", "GBP", "EUR"];
+
+async function guard() {
+  const u = await getCurrentUser();
+  return u && u.role === "ADMIN" ? u : null;
+}
+
+async function upsert(data: Record<string, unknown>) {
+  await db.settings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
+  revalidatePath("/", "layout");
+}
+
+export async function saveCompany(fd: FormData): Promise<ActionResult> {
+  if (!(await guard())) return { error: "Only administrators can change settings." };
+  const companyName = str(fd, "companyName");
+  if (!companyName) return { error: "Company name is required." };
+  const companyEmail = optStr(fd, "companyEmail");
+  if (companyEmail && !/^\S+@\S+\.\S+$/.test(companyEmail)) return { error: "Please enter a valid email." };
+  await upsert({ companyName, companyPhone: optStr(fd, "companyPhone"), companyEmail, companyAddress: optStr(fd, "companyAddress") });
+  return { ok: true };
+}
+
+export async function savePreferences(fd: FormData): Promise<ActionResult> {
+  if (!(await guard())) return { error: "Only administrators can change settings." };
+  const currency = str(fd, "currency");
+  if (!CURRENCIES.includes(currency)) return { error: "Unsupported currency." };
+  const defaultCountryCode = str(fd, "defaultCountryCode").replace(/\D/g, "");
+  if (!defaultCountryCode || defaultCountryCode.length > 4) return { error: "Enter a valid country code, e.g. 91." };
+  const defaultCommission = optNum(fd, "defaultCommission") ?? 0;
+  if (defaultCommission < 0 || defaultCommission > 100) return { error: "Commission must be between 0 and 100." };
+  await upsert({ currency, defaultCountryCode, defaultCommission });
+  return { ok: true };
+}
+
+export async function saveWhatsApp(fd: FormData): Promise<ActionResult> {
+  if (!(await guard())) return { error: "Only administrators can change settings." };
+  const waApiEnabled = fd.get("waApiEnabled") === "on";
+  const waPhoneNumberId = optStr(fd, "waPhoneNumberId");
+  const tokenInput = str(fd, "waAccessToken");
+  const current = await db.settings.findUnique({ where: { id: 1 } });
+  const waAccessToken = tokenInput || current?.waAccessToken || null;
+  if (waApiEnabled && (!waPhoneNumberId || !waAccessToken)) {
+    return { error: "Phone number ID and access token are required to enable the API." };
+  }
+  await upsert({ waApiEnabled, waPhoneNumberId, waAccessToken });
+  return { ok: true };
+}
+
+export async function regenerateWebhookKey(): Promise<ActionResult<string>> {
+  if (!(await guard())) return { error: "Only administrators can change settings." };
+  const key = randomBytes(16).toString("hex");
+  await upsert({ leadWebhookKey: key });
+  return { ok: true, data: key };
+}
