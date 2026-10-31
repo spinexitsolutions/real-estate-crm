@@ -14,7 +14,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1fr_1.05fr]">
       <div className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-20">
-        <div className="mx-auto w-full max-w-sm">
+        <div className="mx-auto w-full max-w-md">
           <Link href="/" className="mb-10 flex items-center gap-2.5">
             <LogoMark className="size-9" />
             <span className="text-lg font-semibold tracking-tight text-slate-900">{BRAND.name}</span>
