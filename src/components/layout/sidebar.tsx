@@ -12,12 +12,14 @@ export function SidebarContent({
   company,
   followupCount,
   whatsappUnread = 0,
+  logoUrl,
   onNavigate,
 }: {
   role: string;
   company: string;
   followupCount: number;
   whatsappUnread?: number;
+  logoUrl?: string | null;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -26,7 +28,12 @@ export function SidebarContent({
   return (
     <div className="flex h-full flex-col bg-[#0b1020] text-slate-300">
       <div className="flex h-16 items-center gap-2.5 px-5">
-        <LogoMark className="size-8" />
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt="" className="size-8 shrink-0 rounded-lg bg-white object-contain p-0.5" />
+        ) : (
+          <LogoMark className="size-8" />
+        )}
         <div className="min-w-0">
           <p className="text-[15px] font-semibold leading-tight text-white">EstateDesk</p>
           <p className="truncate text-[11px] text-slate-400">{company}</p>

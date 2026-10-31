@@ -59,6 +59,10 @@ const IMAGES = [
 
 async function main() {
   console.log("Clearing existing data...");
+  // Calls / attendance / site visits (calls only SET NULL on lead/user delete, so clear them explicitly)
+  await db.callLog.deleteMany();
+  await db.siteVisitCheckIn.deleteMany();
+  await db.attendance.deleteMany();
   await db.activity.deleteMany();
   await db.whatsAppMessage.deleteMany();
   await db.followUp.deleteMany();
@@ -78,6 +82,12 @@ async function main() {
       companyEmail: "sales@skylinerealty.in",
       companyAddress: "4th Floor, Trade Centre, BKC, Mumbai 400051",
       leadWebhookKey: randomBytes(16).toString("hex"),
+      // --- Branding + public website (website / brochure module) ---
+      reraNumber: "A51800012345",
+      websiteEnabled: true,
+      websiteTagline: "Find your dream home in Mumbai, Pune and Bengaluru",
+      websiteAbout:
+        "Skyline Realty has helped over 2,500 families buy, sell and rent homes since 2012. Our advisors know every micro-market we work in, every listing is verified before it goes live, and we stay with you from the first site visit to registration and possession.",
     },
   });
 
@@ -151,6 +161,30 @@ async function main() {
     });
     properties.push(p);
   }
+
+  // --- Public website: publish most available listings with map coordinates (website / brochure module) ---
+  // Deterministic (does not consume rand()) so the rest of the seed stays identical.
+  const LOCALITY_COORDS: Record<string, [number, number]> = {
+    "Andheri West": [19.1364, 72.8296], Powai: [19.1176, 72.906], "Bandra West": [19.0596, 72.8295], "Goregaon East": [19.1663, 72.8526],
+    "Thane West": [19.2183, 72.9781], "Malad West": [19.1874, 72.8484], Baner: [18.559, 73.7868], Hinjewadi: [18.5913, 73.7389],
+    Kharadi: [18.5515, 73.9348], Wakad: [18.5987, 73.7652], "Koregaon Park": [18.5362, 73.8939], Whitefield: [12.9698, 77.75],
+    "HSR Layout": [12.9116, 77.6474], "Sarjapur Road": [12.9107, 77.6855], Hebbal: [13.0358, 77.597], "Electronic City": [12.8452, 77.6602],
+  };
+  let publishedCount = 0;
+  for (const [i, p] of properties.entries()) {
+    const base = p.locality ? LOCALITY_COORDS[p.locality] : undefined;
+    const publish = (p.status === "AVAILABLE" || p.status === "RESERVED") && publishedCount < 12;
+    if (publish) publishedCount++;
+    await db.property.update({
+      where: { id: p.id },
+      data: {
+        published: publish,
+        latitude: base ? Number((base[0] + ((i % 5) - 2) * 0.0021).toFixed(6)) : null,
+        longitude: base ? Number((base[1] + ((i % 3) - 1) * 0.0027).toFixed(6)) : null,
+      },
+    });
+  }
+  console.log(`Published ${publishedCount} properties on the website.`);
 
   console.log("Creating leads...");
   const statusWeights = ["NEW", "NEW", "NEW", "CONTACTED", "CONTACTED", "CONTACTED", "QUALIFIED", "QUALIFIED", "SITE_VISIT", "SITE_VISIT", "NEGOTIATION", "WON", "WON", "LOST", "LOST"];
@@ -335,6 +369,153 @@ async function main() {
     }
     await db.lead.update({ where: { id: lead.id }, data: { lastInboundAt: replyAt, unreadMessages: c.unread } });
     await db.activity.create({ data: { type: "WHATSAPP", content: `Received: ${c.reply}`, leadId: lead.id, createdAt: replyAt } });
+  }
+
+  // ---- Documents and integration log (documents + portal integrations module) ----
+  console.log("Creating documents and integration log...");
+  await db.integrationLog.deleteMany();
+  await db.document.deleteMany();
+  {
+    const { mkdirSync, rmSync, writeFileSync } = await import("fs");
+    const pathMod = await import("path");
+    // Placeholder files are only written for local development storage; with Supabase configured,
+    // documents are uploaded from the app so the seed skips them.
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      // all Document rows were just wiped, so local files are orphans
+      rmSync(pathMod.join(process.cwd(), ".data", "documents"), { recursive: true, force: true });
+      const pdfFor = (title: string) =>
+        Buffer.from(
+          `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length ${44 + title.length}>>stream\nBT /F1 20 Tf 72 760 Td (${title}) Tj ET\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`,
+        );
+      const docLeads = leads.filter((l) => ["NEGOTIATION", "WON", "SITE_VISIT"].includes(l.status)).slice(0, 4);
+      const specs: [string, string, boolean][] = [
+        ["PAN Card", "KYC_PAN", false],
+        ["Aadhaar Card", "KYC_AADHAAR", false],
+        ["Allotment Letter", "ALLOTMENT_LETTER", true],
+        ["Agreement for Sale (Draft)", "AGREEMENT", true],
+      ];
+      let n = 0;
+      for (const lead of docLeads) {
+        const count = lead.status === "WON" ? 4 : 2;
+        for (const [name, category, shared] of specs.slice(0, count)) {
+          const storagePath = `leads/${lead.id}/seed-${++n}.pdf`;
+          const abs = pathMod.join(process.cwd(), ".data", "documents", storagePath);
+          mkdirSync(pathMod.dirname(abs), { recursive: true });
+          const bytes = pdfFor(`${name} - ${lead.name}`);
+          writeFileSync(abs, bytes);
+          await db.document.create({
+            data: { name: `${name} - ${lead.name}`, category, storagePath, mimeType: "application/pdf", size: bytes.length, visibleToCustomer: shared, leadId: lead.id, uploadedById: lead.assignedToId ?? admin.id, createdAt: daysAgo(int(1, 20)) },
+          });
+        }
+      }
+    }
+    const portalLeads = leads.filter((l) => ["FACEBOOK", "INSTAGRAM", "PORTAL_99ACRES", "PORTAL_MAGICBRICKS", "PORTAL_HOUSING"].includes(l.source)).slice(0, 10);
+    const logSource: Record<string, string> = { FACEBOOK: "FACEBOOK", INSTAGRAM: "INSTAGRAM", PORTAL_99ACRES: "99ACRES", PORTAL_MAGICBRICKS: "MAGICBRICKS", PORTAL_HOUSING: "HOUSING" };
+    for (const l of portalLeads) {
+      await db.integrationLog.create({ data: { source: logSource[l.source], status: "OK", message: `New lead ${l.name} (${l.phone})`, leadId: l.id, createdAt: daysAgo(int(0, 6)) } });
+    }
+    await db.integrationLog.create({ data: { source: "HOUSING", status: "ERROR", message: "Missing or invalid phone number", payload: '{"name":"Unknown","phone":""}', createdAt: daysAgo(2) } });
+    await db.integrationLog.create({ data: { source: "FACEBOOK", status: "IGNORED", message: "Ignored event: feed", createdAt: daysAgo(3) } });
+  }
+
+
+  console.log("Creating calls, attendance and site visits...");
+  {
+    const OFFICE = { lat: 19.066, lng: 72.8686 }; // BKC, Mumbai
+    await db.settings.update({
+      where: { id: 1 },
+      data: { officeLatitude: OFFICE.lat, officeLongitude: OFFICE.lng, officeRadiusM: 300, telephonyWebhookKey: randomBytes(16).toString("hex") },
+    });
+
+    // Approximate coordinates for properties so site check-in distance works
+    const CITY_CENTER: Record<string, { lat: number; lng: number }> = {
+      Mumbai: { lat: 19.076, lng: 72.8777 },
+      Pune: { lat: 18.5204, lng: 73.8567 },
+      Bengaluru: { lat: 12.9716, lng: 77.5946 },
+    };
+    const props = await db.property.findMany({ select: { id: true, city: true, latitude: true } });
+    for (const p of props) {
+      if (p.latitude !== null) continue;
+      const c = CITY_CENTER[p.city] ?? CITY_CENTER.Mumbai;
+      await db.property.update({ where: { id: p.id }, data: { latitude: c.lat + (rand() - 0.5) * 0.12, longitude: c.lng + (rand() - 0.5) * 0.12 } });
+    }
+
+    const SAMPLE_RECORDINGS = [
+      "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+      "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    ];
+    const callLeads = leads.filter((l) => l.status !== "NEW" && l.assignedToId);
+    const outcomes = ["Interested", "Call back later", "Site visit fixed", "Negotiating", "Not reachable", "Switched off"];
+    for (let i = 0; i < 32; i++) {
+      const lead = pick(callLeads);
+      const agentId = lead.assignedToId!;
+      const agentUser = team.find((u) => u.id === agentId);
+      const direction = rand() > 0.78 ? "IN" : "OUT";
+      const r = rand();
+      const status = r < 0.62 ? "ANSWERED" : direction === "IN" ? "MISSED" : r < 0.82 ? "NO_ANSWER" : "BUSY";
+      const durationSec = status === "ANSWERED" ? int(35, 900) : 0;
+      const startedAt = i < 5 ? new Date(Date.now() - int(10, 300) * 60000) : daysAgo(int(1, 20));
+      await db.callLog.create({
+        data: {
+          direction,
+          status,
+          provider: "MANUAL",
+          fromNumber: direction === "OUT" ? agentUser?.phone ?? null : lead.phone,
+          toNumber: direction === "OUT" ? lead.phone : agentUser?.phone ?? null,
+          durationSec,
+          recordingUrl: status === "ANSWERED" && rand() > 0.55 ? pick(SAMPLE_RECORDINGS) : null,
+          outcome: status === "ANSWERED" ? pick(outcomes) : null,
+          notes: status === "ANSWERED" && rand() > 0.5 ? "Discussed pricing and payment plan. Shared brochure on WhatsApp." : null,
+          leadId: lead.id,
+          userId: agentId,
+          startedAt,
+          endedAt: new Date(startedAt.getTime() + durationSec * 1000),
+        },
+      });
+    }
+
+    // Attendance: last 12 days for manager + agents (Sundays off, a few absences, some late)
+    const staff = [manager, ...agents];
+    for (let d = 12; d >= 1; d--) {
+      const day = new Date();
+      day.setDate(day.getDate() - d);
+      if (day.getDay() === 0) continue;
+      const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+      for (const u of staff) {
+        if (rand() < 0.08) continue; // absent
+        const inAt = new Date(day);
+        inAt.setHours(9, 0, 0, 0);
+        inAt.setMinutes(int(10, rand() < 0.2 ? 95 : 58)); // 9:10 - 10:35
+        const outAt = new Date(inAt.getTime() + int(8 * 60, 10 * 60) * 60000);
+        const far = rand() < 0.15;
+        const lat = OFFICE.lat + (far ? 0.02 : (rand() - 0.5) * 0.002);
+        const lng = OFFICE.lng + (far ? 0.015 : (rand() - 0.5) * 0.002);
+        const dLat = ((lat - OFFICE.lat) * Math.PI) / 180;
+        const dLng = ((lng - OFFICE.lng) * Math.PI) / 180;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos((OFFICE.lat * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+        const dist = 2 * 6371000 * Math.asin(Math.sqrt(a));
+        await db.attendance.create({
+          data: { userId: u.id, date: key, checkInAt: inAt, checkInLat: lat, checkInLng: lng, checkInAccuracy: int(8, 40), checkInDistanceM: dist, checkOutAt: outAt, checkOutLat: lat, checkOutLng: lng, checkOutDistanceM: dist },
+        });
+      }
+    }
+
+    // Site visit check-ins on completed site visit follow-ups
+    const visits = await db.followUp.findMany({ where: { type: "SITE_VISIT", status: "COMPLETED", propertyId: { not: null } }, take: 8, include: { property: true } });
+    for (const v of visits) {
+      const p = v.property!;
+      const lat = (p.latitude ?? OFFICE.lat) + (rand() - 0.5) * 0.0015;
+      const lng = (p.longitude ?? OFFICE.lng) + (rand() - 0.5) * 0.0015;
+      const dLat = ((lat - (p.latitude ?? lat)) * Math.PI) / 180;
+      const dLng = ((lng - (p.longitude ?? lng)) * Math.PI) / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat * Math.PI) / 180) ** 2 * Math.sin(dLng / 2) ** 2;
+      const dist = p.latitude !== null ? 2 * 6371000 * Math.asin(Math.sqrt(a)) : null;
+      const at = v.completedAt ?? v.dueAt;
+      await db.siteVisitCheckIn.create({
+        data: { leadId: v.leadId, propertyId: p.id, followUpId: v.id, userId: v.assignedToId, latitude: lat, longitude: lng, accuracy: int(5, 25), distanceM: dist, notes: "Family visited the sample flat. Liked the layout.", createdAt: at },
+      });
+      await db.activity.create({ data: { type: "SITE_VISIT", content: `Checked in at ${p.title}${dist !== null ? ` (${Math.round(dist)} m from the property location)` : ""}`, leadId: v.leadId, propertyId: p.id, userId: v.assignedToId, createdAt: at } });
+    }
   }
 
   console.log("\nDone. Sign in with:");

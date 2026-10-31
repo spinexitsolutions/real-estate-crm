@@ -49,7 +49,7 @@ function safeLocal(storagePath: string) {
 
 export async function uploadDocument(bytes: Buffer, mime: DocMime, folder: string): Promise<{ storagePath: string } | { error: string }> {
   const now = new Date();
-  const cleanFolder = folder.replace(/[^a-zA-Z0-9_-]/g, "") || "misc";
+  const cleanFolder = folder.replace(/[^a-zA-Z0-9_/-]/g, "").replace(/\/+/g, "/").replace(/^\/|\/$/g, "") || "misc";
   const storagePath = `${cleanFolder}/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${Date.now().toString(36)}-${randomBytes(8).toString("hex")}.${DOC_EXT[mime]}`;
 
   if (isDocStorageRemote()) {

@@ -44,6 +44,7 @@ export function AppShell({
   notifications,
   followupCount,
   whatsappUnread = 0,
+  logoUrl,
   children,
 }: {
   user: { name: string; email: string; role: string };
@@ -51,6 +52,7 @@ export function AppShell({
   notifications: ShellNotification[];
   followupCount: number;
   whatsappUnread?: number;
+  logoUrl?: string | null;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -60,11 +62,11 @@ export function AppShell({
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">
         <Suspense>
-          <SidebarContent role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} />
+          <SidebarContent role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} logoUrl={logoUrl} />
         </Suspense>
       </aside>
       <Suspense>
-        <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} />
+        <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} role={user.role} company={company} followupCount={followupCount} whatsappUnread={whatsappUnread} logoUrl={logoUrl} />
       </Suspense>
 
       <div className="lg:pl-64">

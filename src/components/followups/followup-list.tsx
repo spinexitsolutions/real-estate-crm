@@ -18,6 +18,7 @@ import { SendWhatsAppButton } from "@/components/whatsapp/send-whatsapp";
 import { CompleteFollowUpButton } from "./complete-followup";
 import { FollowUpFormModal } from "./followup-form";
 import { FollowUpTypeBadge } from "./followup-icon";
+import { SiteCheckInButton } from "@/components/site-visits/site-checkin-button";
 
 export type FollowUpItem = {
   id: string;
@@ -132,6 +133,9 @@ export function FollowUpRow({ item: f, users, properties, showLead = true }: { i
             <span className="hidden sm:inline-flex">
               <SendWhatsAppButton lead={f.lead} property={undefined} followUpDate={formatDateTime(f.dueAt)} size="icon" iconOnly variant="secondary" />
             </span>
+            {f.type === "SITE_VISIT" && (
+              <SiteCheckInButton leadId={f.leadId} propertyId={f.propertyId} followUpId={f.id} propertyTitle={f.property?.title ?? null} size="icon" />
+            )}
             <CompleteFollowUpButton id={f.id} leadName={f.lead.name} size="icon" />
           </>
         )}

@@ -31,6 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell
       user={{ name: user.name, email: user.email, role: user.role }}
       company={settings.companyName}
+      logoUrl={settings.logoUrl}
       followupCount={count}
       whatsappUnread={waUnread._sum.unreadMessages ?? 0}
       notifications={due.map((f) => ({

@@ -39,6 +39,9 @@ import { Badge, OptionBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { ImageGallery, PropertyMoreMenu, PropertyShareButtons, PropertyStatusMenu } from "@/components/properties/property-actions";
 import { ShortlistButton } from "@/components/properties/shortlist-button";
+import { BrochureActions, PublishToggle } from "@/components/properties/brochure-actions";
+import { brochureUrl, originFrom } from "@/lib/brochure-link";
+import { headers } from "next/headers";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -125,6 +128,9 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     .filter((x) => x !== null)
     .join("\n");
 
+  const origin = originFrom(await headers());
+  const publicBrochure = brochureUrl(property.id, origin);
+
   const canDelete = isManager(user) || property.agentId === user.id;
   const specs = [
     { icon: Building2, label: "Type", value: labelOf(PROPERTY_TYPES, property.type) },
@@ -162,6 +168,8 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PropertyStatusMenu id={property.id} status={property.status} />
+          <PublishToggle id={property.id} published={property.published} siteUrl={`/site/properties/${property.id}`} />
+          <BrochureActions propertyId={property.id} title={property.title} publicUrl={publicBrochure} shareText={shareText} />
           <PropertyShareButtons text={shareText} />
           <PropertyMoreMenu id={property.id} featured={property.featured} canDelete={canDelete} />
         </div>
