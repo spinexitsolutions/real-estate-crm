@@ -39,8 +39,15 @@ function readProperty(fd: FormData) {
     ownerName: optStr(fd, "ownerName"),
     ownerPhone: optStr(fd, "ownerPhone"),
     featured: fd.get("featured") === "on" || fd.get("featured") === "true",
+    published: fd.get("published") === "on" || fd.get("published") === "true",
+    latitude: validCoord(optNum(fd, "latitude"), 90),
+    longitude: validCoord(optNum(fd, "longitude"), 180),
     agentId: optStr(fd, "agentId"),
   };
+}
+
+function validCoord(v: number | null, max: number) {
+  return v !== null && Math.abs(v) <= max ? v : null;
 }
 
 async function nextCode() {
@@ -102,6 +109,16 @@ export async function toggleFeatured(id: string): Promise<ActionResult> {
   const p = await db.property.findUnique({ where: { id }, select: { featured: true } });
   if (!p) return { error: "Property not found." };
   await db.property.update({ where: { id }, data: { featured: !p.featured } });
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function publishProperty(id: string, published: boolean): Promise<ActionResult> {
+  const user = await requireUser();
+  const p = await db.property.findUnique({ where: { id }, select: { id: true } });
+  if (!p) return { error: "Property not found." };
+  await db.property.update({ where: { id }, data: { published } });
+  await logActivity({ type: "PROPERTY", content: published ? "Published on the public website" : "Removed from the public website", propertyId: id, userId: user.id });
   revalidatePath("/", "layout");
   return { ok: true };
 }
