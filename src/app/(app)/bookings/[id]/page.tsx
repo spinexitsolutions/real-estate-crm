@@ -7,7 +7,7 @@ import { isManager, requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { BOOKING_STATUSES, PAYMENT_METHODS, labelOf } from "@/lib/constants";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
-import { effectiveStatus, summarizeInstallments } from "@/lib/payment-plan";
+import { summarizeInstallments } from "@/lib/payment-plan";
 import { cn, parseImages } from "@/lib/utils";
 import { Card, CardHeader } from "@/components/ui/card";
 import { OptionBadge } from "@/components/ui/badge";
@@ -304,5 +304,3 @@ function Row({ icon: Icon, label, children }: { icon: React.ComponentType<{ clas
   );
 }
 
-// Unused helper kept local to avoid lint noise for effectiveStatus import in future status chips.
-void effectiveStatus;
