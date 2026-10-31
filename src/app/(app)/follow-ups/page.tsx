@@ -74,7 +74,7 @@ export default async function FollowUpsPage({ searchParams }: { searchParams: Pr
   const filters: Prisma.FollowUpWhereInput = {
     ...(sp.type ? { type: sp.type } : {}),
     ...(manager && sp.agent ? { assignedToId: sp.agent } : {}),
-    ...(sp.q ? { lead: { OR: [{ name: { contains: sp.q } }, { phone: { contains: sp.q } }] } } : {}),
+    ...(sp.q ? { lead: { OR: [{ name: { contains: sp.q, mode: "insensitive" } }, { phone: { contains: sp.q, mode: "insensitive" } }] } } : {}),
   };
   const base: Prisma.FollowUpWhereInput = { AND: [scope, filters] };
 

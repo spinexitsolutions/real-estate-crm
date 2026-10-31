@@ -30,7 +30,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const page = Math.max(1, Number(sp.page) || 1);
 
   const where: Prisma.LeadWhereInput = { ...leadScope(user) };
-  if (sp.q) where.OR = [{ name: { contains: sp.q } }, { phone: { contains: sp.q } }, { email: { contains: sp.q } }, { preferredLocation: { contains: sp.q } }, { tags: { contains: sp.q } }];
+  if (sp.q) where.OR = [{ name: { contains: sp.q, mode: "insensitive" } }, { phone: { contains: sp.q, mode: "insensitive" } }, { email: { contains: sp.q, mode: "insensitive" } }, { preferredLocation: { contains: sp.q, mode: "insensitive" } }, { tags: { contains: sp.q, mode: "insensitive" } }];
   if (sp.status) where.status = sp.status;
   else if (sp.stage === "open") where.status = { in: OPEN_LEAD_STATUSES };
   if (sp.source) where.source = sp.source;

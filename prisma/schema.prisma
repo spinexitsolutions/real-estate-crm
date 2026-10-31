@@ -1,14 +1,15 @@
-// EstateDesk CRM database schema
-// Local / single server: SQLite (default). For production on PostgreSQL,
-// change provider to "postgresql" and set DATABASE_URL accordingly.
+// EstateDesk CRM database schema (PostgreSQL / Supabase)
+// DATABASE_URL -> Supabase pooled connection (port 6543, ?pgbouncer=true)
+// DIRECT_URL   -> Supabase direct connection (port 5432), used for migrations
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -20,6 +21,9 @@ model User {
   role        String   @default("AGENT") // ADMIN | MANAGER | AGENT
   active      Boolean  @default(true)
   monthlyTarget Float  @default(0)
+  notifyEmail    Boolean @default(true)
+  notifyPush     Boolean @default(true)
+  notifyWhatsApp Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -30,6 +34,8 @@ model User {
   activities      Activity[]
   deals           Deal[]
   messages        WhatsAppMessage[]
+  pushSubscriptions PushSubscription[]
+  resetTokens     PasswordResetToken[]
 }
 
 model Lead {
@@ -51,6 +57,8 @@ model Lead {
   tags              String    @default("")
   lostReason        String?
   lastContactedAt   DateTime?
+  lastInboundAt     DateTime?
+  unreadMessages    Int       @default(0)
   assignedToId      String?
   createdById       String?
   createdAt         DateTime  @default(now())
@@ -126,6 +134,7 @@ model FollowUp {
   notes        String?
   outcome      String?
   completedAt  DateTime?
+  reminderSentAt DateTime?
   leadId       String
   propertyId   String?
   assignedToId String?
@@ -186,6 +195,10 @@ model WhatsAppTemplate {
   name      String
   category  String   @default("GENERAL") // GREETING | FOLLOW_UP | PROPERTY | SITE_VISIT | GENERAL | FESTIVE
   body      String
+  // Approved WhatsApp Business (Meta) template, required to message a lead outside the 24h window
+  metaName     String?
+  metaLanguage String   @default("en")
+  metaParams   String   @default("") // comma separated variable keys in {{1}}, {{2}} order, e.g. "name,property"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -198,6 +211,8 @@ model WhatsAppMessage {
   channel   String   @default("LINK") // LINK | API
   status    String   @default("SENT") // SENT | FAILED | OPENED
   error     String?
+  waMessageId String?  @unique
+  mediaType String?
   leadId    String?
   userId    String?
   createdAt DateTime @default(now())
@@ -206,6 +221,7 @@ model WhatsAppMessage {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
+  @@index([leadId, createdAt])
 }
 
 model Settings {
@@ -221,5 +237,43 @@ model Settings {
   waPhoneNumberId    String?
   waAccessToken      String?
   leadWebhookKey     String?
+  waVerifyToken      String?
+  waAppSecret        String?
+  waDigestTemplate   String?  // approved Meta template name used for agent daily digest on WhatsApp
+  emailDigestEnabled Boolean  @default(true)
+  pushEnabled        Boolean  @default(true)
+  lastDigestDate     String?  // yyyy-MM-dd of last daily digest run
   updatedAt          DateTime @updatedAt
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userId    String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  key       String   // email or ip
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
 }

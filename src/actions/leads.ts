@@ -55,7 +55,7 @@ export async function createLead(fd: FormData): Promise<ActionResult<{ id: strin
   if (err) return { error: err };
 
   const digits = data.phone.replace(/\D/g, "").slice(-10);
-  const dup = await db.lead.findFirst({ where: { phone: { contains: digits } }, select: { id: true, name: true } });
+  const dup = await db.lead.findFirst({ where: { phone: { contains: digits, mode: "insensitive" } }, select: { id: true, name: true } });
   if (dup && str(fd, "allowDuplicate") !== "1") {
     return { error: `A lead with this phone already exists (${dup.name}). Submit again to save anyway.`, data: undefined };
   }

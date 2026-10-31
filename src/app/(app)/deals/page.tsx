@@ -29,7 +29,7 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
 
   const scope: Prisma.DealWhereInput = manager ? {} : { agentId: user.id };
   const where: Prisma.DealWhereInput = { ...scope };
-  if (sp.q) where.OR = [{ title: { contains: sp.q } }, { lead: { name: { contains: sp.q } } }, { property: { code: { contains: sp.q } } }];
+  if (sp.q) where.OR = [{ title: { contains: sp.q, mode: "insensitive" } }, { lead: { name: { contains: sp.q, mode: "insensitive" } } }, { property: { code: { contains: sp.q, mode: "insensitive" } } }];
   if (sp.agent && manager) where.agentId = sp.agent;
   if (sp.stage) where.stage = sp.stage;
 

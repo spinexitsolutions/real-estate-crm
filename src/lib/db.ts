@@ -1,4 +1,7 @@
 import { PrismaClient } from "@prisma/client";
+import { applyAppTimezone } from "./timezone";
+
+applyAppTimezone();
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 

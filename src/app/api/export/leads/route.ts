@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   const assignee = sp.get("assignee");
 
   const where: Prisma.LeadWhereInput = { ...leadScope(user) };
-  if (q) where.OR = [{ name: { contains: q } }, { phone: { contains: q } }, { email: { contains: q } }, { preferredLocation: { contains: q } }];
+  if (q) where.OR = [{ name: { contains: q, mode: "insensitive" } }, { phone: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }, { preferredLocation: { contains: q, mode: "insensitive" } }];
   if (status) where.status = status;
   if (source) where.source = source;
   if (priority) where.priority = priority;

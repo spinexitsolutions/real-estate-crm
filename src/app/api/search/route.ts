@@ -14,19 +14,19 @@ export async function GET(req: Request) {
     db.lead.findMany({
       where: {
         ...leadScope(user),
-        OR: [{ name: { contains: q } }, { phone: { contains: q } }, { email: { contains: q } }, { preferredLocation: { contains: q } }],
+        OR: [{ name: { contains: q, mode: "insensitive" } }, { phone: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }, { preferredLocation: { contains: q, mode: "insensitive" } }],
       },
       take: 6,
       orderBy: { updatedAt: "desc" },
     }),
     db.property.findMany({
-      where: { OR: [{ title: { contains: q } }, { code: { contains: q } }, { city: { contains: q } }, { locality: { contains: q } }] },
+      where: { OR: [{ title: { contains: q, mode: "insensitive" } }, { code: { contains: q, mode: "insensitive" } }, { city: { contains: q, mode: "insensitive" } }, { locality: { contains: q, mode: "insensitive" } }] },
       take: 5,
       orderBy: { updatedAt: "desc" },
     }),
     db.deal.findMany({
       where: {
-        title: { contains: q },
+        title: { contains: q, mode: "insensitive" },
         ...(user.role === "AGENT" ? { agentId: user.id } : {}),
       },
       take: 4,

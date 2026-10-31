@@ -38,12 +38,12 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
   const where: Prisma.PropertyWhereInput = {};
   if (sp.q) {
     where.OR = [
-      { title: { contains: sp.q } },
-      { code: { contains: sp.q } },
-      { locality: { contains: sp.q } },
-      { city: { contains: sp.q } },
-      { address: { contains: sp.q } },
-      { ownerName: { contains: sp.q } },
+      { title: { contains: sp.q, mode: "insensitive" } },
+      { code: { contains: sp.q, mode: "insensitive" } },
+      { locality: { contains: sp.q, mode: "insensitive" } },
+      { city: { contains: sp.q, mode: "insensitive" } },
+      { address: { contains: sp.q, mode: "insensitive" } },
+      { ownerName: { contains: sp.q, mode: "insensitive" } },
     ];
   }
   if (sp.type) where.type = sp.type;
