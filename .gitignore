@@ -13,3 +13,4 @@ npm-debug.log*
 
 # local photo uploads (dev fallback)
 /public/uploads
+.data

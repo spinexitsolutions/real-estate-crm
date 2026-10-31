@@ -12,6 +12,7 @@ import { AMENITIES, FURNISHING, LISTING_TYPES, PROPERTY_STATUSES, PROPERTY_TYPES
 import { formatCompact } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PhotoManager } from "./photo-manager";
+import { LocationFields } from "./location-fields";
 
 export type PropertyFormValues = {
   id: string;
@@ -34,6 +35,9 @@ export type PropertyFormValues = {
   ownerName: string | null;
   ownerPhone: string | null;
   featured: boolean;
+  published?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
   agentId: string | null;
 };
 
@@ -193,6 +197,7 @@ export function PropertyForm({
             <Field label="Address" className="sm:col-span-2">
               <Input name="address" defaultValue={property?.address ?? ""} placeholder="Building, street, landmark" />
             </Field>
+            <LocationFields latitude={property?.latitude ?? null} longitude={property?.longitude ?? null} />
           </div>
         </Card>
 
@@ -216,6 +221,13 @@ export function PropertyForm({
               <span>
                 <span className="block text-sm font-medium text-slate-800">Featured listing</span>
                 <span className="block text-xs text-slate-500">Highlight this property across the CRM.</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
+              <input type="checkbox" name="published" defaultChecked={property?.published ?? false} className="mt-0.5 size-4 rounded border-slate-300 accent-brand-600" />
+              <span>
+                <span className="block text-sm font-medium text-slate-800">Publish on website</span>
+                <span className="block text-xs text-slate-500">Show this listing on your public property website. Owner details are never shown.</span>
               </span>
             </label>
           </div>

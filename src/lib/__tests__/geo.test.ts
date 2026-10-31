@@ -5,7 +5,7 @@ describe("distanceMeters", () => {
   it("is zero for the same point", () => {
     expect(distanceMeters(19.066, 72.8686, 19.066, 72.8686)).toBe(0);
   });
-  it("matches known distance Mumbai BKC to Powai (~9-11 km)", () => {
+  it("matches known distance Mumbai BKC to Powai (~7 km straight line)", () => {
     const d = distanceMeters(19.066, 72.8686, 19.1176, 72.906);
     expect(d).toBeGreaterThan(6500);
     expect(d).toBeLessThan(7500);
